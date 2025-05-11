@@ -1,63 +1,3 @@
-// import { Injectable, ConflictException, NotFoundException } from "@nestjs/common"
-// import { InjectRepository } from "@nestjs/typeorm"
-// import type { Repository } from "typeorm"
-// import * as bcrypt from "bcrypt"
-// import type { CreateUserDto } from "../auth/dto/create-user.dto"
-// import { User } from "./user.entity"
-
-// @Injectable()
-// export class UsersService {
-//   constructor(
-//     @InjectRepository(User)
-//     private usersRepository: Repository<User>,
-//   ) {}
-
-//   async create(createUserDto: CreateUserDto): Promise<User> {
-//     // Check if email already exists
-//     const existingUser = await this.usersRepository.findOne({
-//       where: { email: createUserDto.email },
-//     })
-
-//     if (existingUser) {
-//       throw new ConflictException("Email already exists")
-//     }
-
-//     // Hash the password
-//     const hashedPassword = await bcrypt.hash(createUserDto.password, 10)
-
-//     // Create new user
-//     const user = this.usersRepository.create({
-//       ...createUserDto,
-//       password: hashedPassword,
-//     })
-
-//     return await this.usersRepository.save(user)
-//   }
-
-//   async findByEmail(email: string): Promise<User> {
-//     const user = await this.usersRepository.findOne({
-//       where: { email },
-//     })
-
-//     if (!user) {
-//       throw new NotFoundException(`User with email ${email} not found`)
-//     }
-
-//     return user
-//   }
-
-//   async findById(id: string): Promise<User> {
-//     const user = await this.usersRepository.findOne({
-//       where: { id },
-//     })
-
-//     if (!user) {
-//       throw new NotFoundException(`User with id ${id} not found`)
-//     }
-
-//     return user
-//   }
-// }
 import {
   Injectable,
   ConflictException,
@@ -69,9 +9,9 @@ import { InjectRepository } from "@nestjs/typeorm"
 import { Repository } from "typeorm"
 import * as bcrypt from "bcrypt"
 import * as crypto from "crypto"
-import { User } from "./user.entity" // Adjust path if needed
-import { CreateUserDto } from "../auth/dto/create-user.dto" // Adjust path if needed
-import { MailService } from "../mail/mail.service" // Adjust path if needed
+import { User } from "./user.entity"
+import { CreateUserDto } from "../auth/dto/create-user.dto"
+import { MailService } from "../mail/mail.service"
 
 @Injectable()
 export class UsersService {

@@ -1,65 +1,10 @@
-// import { Injectable, UnauthorizedException } from "@nestjs/common"
-// import { JwtService } from "@nestjs/jwt"
-// import * as bcrypt from "bcrypt"
-// import { UsersService } from "../users/users.service"
-// import { User } from "src/modules/users/user.entity"
-// import { CreateUserDto } from "src/modules/auth/dto/create-user.dto"
-// import { LoginDto } from "src/modules/auth/dto/login.dto"
-
-// @Injectable()
-// export class AuthService {
-//   constructor(
-//     private readonly usersService: UsersService,
-//     private readonly jwtService: JwtService,
-//   ) {}
-
-//   async register(createUserDto: CreateUserDto): Promise<User> {
-//     return this.usersService.create(createUserDto)
-//   }
-
-//   async validateUser(email: string, password: string): Promise<any> {
-//     try {
-//       const user = await this.usersService.findByEmail(email)
-//       const isPasswordValid = await bcrypt.compare(password, user.password)
-
-//       if (isPasswordValid) {
-//         const { password, ...result } = user
-//         return result
-//       }
-
-//       return null
-//     } catch (error) {
-//       return null
-//     }
-//   }
-
-//   async login(loginDto: LoginDto) {
-//     const user = await this.validateUser(loginDto.email, loginDto.password)
-
-//     if (!user) {
-//       throw new UnauthorizedException("Invalid credentials")
-//     }
-
-//     const payload = { email: user.email, sub: user.id }
-
-//     return {
-//       access_token: this.jwtService.sign(payload),
-//       user: {
-//         id: user.id,
-//         name: user.name,
-//         email: user.email,
-//       },
-//     }
-//   }
-// }
-
 import { Injectable, UnauthorizedException, BadRequestException, Logger } from "@nestjs/common"
 import { JwtService } from "@nestjs/jwt"
 import * as bcrypt from "bcrypt"
 import { UsersService } from "../users/users.service"
+import { User } from "../users/user.entity"
 import { CreateUserDto } from "./dto/create-user.dto"
 import { LoginDto } from "./dto/login.dto"
-import { User } from "../users/user.entity"
 
 @Injectable()
 export class AuthService {
@@ -98,6 +43,7 @@ export class AuthService {
       return null
     }
   }
+
   async findUserByEmail(email: string): Promise<User | null> {
     // Assume your UsersService has a method findByEmail
     const user = await this.usersService.findByEmail(email); 
