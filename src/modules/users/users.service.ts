@@ -44,6 +44,7 @@ export class UsersService {
       verificationToken,
       verificationTokenExpiry,
       isEmailVerified: false,
+      role: createUserDto.role,
     })
 
     const savedUser = await this.usersRepository.save(user)
@@ -128,5 +129,41 @@ export class UsersService {
     }
 
     return user
+  }
+
+  async verifyToken(email: string, token: string): Promise<User | null> {
+    this.logger.debug(`Verifying token for email: ${email}`);
+    const user = await this.usersRepository.findOne({
+      where: { email },
+      select: ['id', 'name', 'email', 'role', 'isEmailVerified', 'verificationToken'], // Select only needed fields
+    });
+    if (!user) {
+      this.logger.error(`No user found for: ${email}`);
+      return null;
+    }
+    if (!user.isEmailVerified) {
+      this.logger.error(`Email not verified for: ${email}`);
+      return null;
+    }
+    if (user.verificationToken && user.verificationToken !== token) {
+      this.logger.error(`Invalid token for: ${email}`);
+      return null;
+    }
+    this.logger.debug(`Token verified or email verified for: ${email}`);
+    return user;
+  }
+  
+  async loginVerified(email: string): Promise<User> {
+    this.logger.debug(`Attempting verified login for: ${email}`);
+    const user = await this.usersRepository.findOne({
+      where: { email, isEmailVerified: true },
+      select: ['id', 'name', 'email', 'role'], // Select only needed fields
+    });
+    if (!user) {
+      this.logger.error(`No verified user found for: ${email}`);
+      throw new NotFoundException('User not found or email not verified');
+    }
+    this.logger.debug(`Verified login successful for: ${email}`);
+    return user;
   }
 }

@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsString, MinLength, IsIn } from "class-validator"
+import { IsEmail, IsNotEmpty, IsString, MinLength, IsIn, IsOptional } from "class-validator"
 
 export class CreateUserDto {
   @IsNotEmpty()
@@ -9,6 +9,10 @@ export class CreateUserDto {
   @IsEmail()
   email: string
   
+  @IsString()
+  @IsOptional()
+  @IsIn(["admin", "student"]) // Restrict to valid roles
+  role: string;
 
   @IsNotEmpty()
   @IsString()

@@ -16,7 +16,8 @@ export class AuthService {
   ) {}
 
   async register(createUserDto: CreateUserDto): Promise<User> {
-    return this.usersService.create(createUserDto)
+    const user = await this.usersService.create(createUserDto);
+    return user; 
   }
 
   async validateUser(email: string, password: string): Promise<any> {
@@ -70,7 +71,7 @@ export class AuthService {
       throw new BadRequestException("Please verify your email before logging in")
     }
 
-    const payload = { email: user.email, sub: user.id }
+    const payload = { email: user.email, sub: user.id , role: user.role}
     this.logger.debug(`Generating JWT token for user: ${user.email}`);
 
     const token = this.jwtService.sign(payload);
@@ -82,8 +83,19 @@ export class AuthService {
         id: user.id,
         name: user.name,
         email: user.email,
+        role: user.role, // Include role
         isEmailVerified: user.isEmailVerified,
       },
     }
+  }
+  async loginVerified(email: string): Promise<User> {
+    this.logger.debug(`Attempting verified login for: ${email}`);
+    const user = await this.usersService.findByEmail(email);
+    if (!user.isEmailVerified) {
+      this.logger.error(`Email not verified for: ${email}`);
+      throw new BadRequestException('Email not verified');
+    }
+    this.logger.debug(`Verified login successful for: ${email}`);
+    return user;
   }
 }

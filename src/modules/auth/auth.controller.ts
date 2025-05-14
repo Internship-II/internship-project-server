@@ -11,8 +11,14 @@ export class AuthController {
   @Post('register')
   async register(@Body() createUserDto: CreateUserDto) {
     const user = await this.authService.register(createUserDto);
-    const { password, ...result } = user;
-    return result;
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      isEmailVerified: user.isEmailVerified,
+      verificationToken: user.verificationToken, // Include token
+    };
   }
 
   @Public() // Bypass authentication guard
@@ -31,4 +37,5 @@ export class AuthController {
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
   }
+  
 }

@@ -8,4 +8,9 @@ export class LoginDto {
   @IsNotEmpty()
   @IsString()
   password: string
+
+  @IsNotEmpty()
+  @IsString()
+  role: string
+
 }
