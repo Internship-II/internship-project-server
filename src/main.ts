@@ -25,9 +25,15 @@ import { AppModule } from './app.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { Reflector } from '@nestjs/core';
 
+import * as express from 'express';
+import { join } from 'path';
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const reflector = app.get(Reflector);
+
+  app.use('/public', express.static(join(__dirname, '..', 'uploads')));
+  
   app.useGlobalGuards(new JwtAuthGuard(reflector));
   app.enableCors({
     origin: 'http://localhost:3000',
