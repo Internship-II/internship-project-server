@@ -9,7 +9,7 @@ import { InjectRepository } from "@nestjs/typeorm"
 import { Repository } from "typeorm"
 import * as bcrypt from "bcrypt"
 import * as crypto from "crypto"
-import { User } from "./user.entity"
+import { User } from "./entities/user.entity"
 import { CreateUserDto } from "../auth/dto/create-user.dto"
 import { MailService } from "../mail/mail.service"
 
@@ -53,8 +53,7 @@ export class UsersService {
       await this.mailService.sendVerificationEmail(savedUser.email, verificationToken)
     } catch (error) {
       console.error("Failed to send verification email:", error)
-      // You may choose to delete user if critical, or log only
-    }
+     }
 
     return savedUser
   }

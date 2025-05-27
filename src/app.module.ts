@@ -10,6 +10,8 @@ import { MailController } from './modules/mail/mail.controller';
 import { MailModule } from './modules/mail/mail.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { Reflector } from '@nestjs/core';
+import { QuestionsModule } from './modules/questions/questions.module';
+ 
 
 @Module({
   imports: [
@@ -33,7 +35,8 @@ import { Reflector } from '@nestjs/core';
     UsersModule,
     AuthModule,
     MailModule,
-  ],
+    QuestionsModule,
+   ],
   controllers: [AppController, MailController],
   providers: [
     AppService,
@@ -42,6 +45,6 @@ import { Reflector } from '@nestjs/core';
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
     },
-  ],
+   ],
 })
 export class AppModule {}
