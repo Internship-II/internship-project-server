@@ -1,7 +1,7 @@
-import { Controller, Post, UploadedFile, UseInterceptors, Get, Param, Res, Delete, Query } from '@nestjs/common';
+import { Controller, Post, UploadedFile, UseInterceptors, Get, Param, Res, Delete } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
-import { File } from './file.entity';
+import { File } from './entities/file.entity';
 import { FileStorageService } from './upload.service';
 import { Public } from '../auth/decorators/public.decorator';
 

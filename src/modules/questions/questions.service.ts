@@ -4,12 +4,14 @@ import { Repository } from 'typeorm';
 import { Question } from './entities/question.entity';
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { UpdateQuestionDto } from './dto/update-question.dto';
+import { FileStorageService } from '../upload/upload.service';
 
 @Injectable()
 export class QuestionsService {
   constructor(
     @InjectRepository(Question)
     private questionsRepository: Repository<Question>,
+    private fileStorageService: FileStorageService,
   ) {}
 
   async findAll() {
@@ -35,7 +37,6 @@ export class QuestionsService {
     question.questionText = createQuestionDto.questionText;
     question.correctAnswer = createQuestionDto.correctAnswer || '';
 
-    // Parse choices if it's a string
     const choices = typeof createQuestionDto.choices === 'string' 
       ? JSON.parse(createQuestionDto.choices) 
       : createQuestionDto.choices || [];
@@ -65,14 +66,23 @@ export class QuestionsService {
       answer: blank.answer
     }));
 
+    // Handle question image - either from file upload or direct ID
     if (files?.questionImage?.[0]) {
-      question.questionImage = files.questionImage[0].path;
+      const uploadedFile = await this.fileStorageService.saveFile(files.questionImage[0]);
+      question.questionImage = uploadedFile.id;
+    } else if (createQuestionDto.questionImage) {
+      // If a file ID is provided directly in the DTO
+      question.questionImage = createQuestionDto.questionImage;
     }
 
     if (files?.choiceImages && choices.length > 0) {
+      const uploadedChoiceImages = await Promise.all(
+        files.choiceImages.map(file => this.fileStorageService.saveFile(file))
+      );
+      
       question.choices = choices.map((choice, index) => ({
         text: choice.text || null,
-        image: files.choiceImages?.[index]?.path || null,
+        image: uploadedChoiceImages[index]?.id || null,
         isCorrect: choice.isCorrect || false
       }));
     }
@@ -99,14 +109,23 @@ export class QuestionsService {
       answer: blank.answer
     }));
 
+    // Handle question image - either from file upload or direct ID
     if (files?.questionImage?.[0]) {
-      question.questionImage = files.questionImage[0].path;
+      const uploadedFile = await this.fileStorageService.saveFile(files.questionImage[0]);
+      question.questionImage = uploadedFile.id;
+    } else if (updateQuestionDto.questionImage) {
+      // If a file ID is provided directly in the DTO
+      question.questionImage = updateQuestionDto.questionImage;
     }
 
     if (files?.choiceImages && updateQuestionDto.choices) {
+      const uploadedChoiceImages = await Promise.all(
+        files.choiceImages.map(file => this.fileStorageService.saveFile(file))
+      );
+      
       question.choices = updateQuestionDto.choices.map((choice, index) => ({
         text: choice.text || null,
-        image: files.choiceImages?.[index]?.path || null,
+        image: uploadedChoiceImages[index]?.id || null,
         isCorrect: choice.isCorrect || false
       }));
     }

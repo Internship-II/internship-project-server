@@ -34,7 +34,7 @@ async function bootstrap() {
 
   app.use('/public', express.static(join(__dirname, '..', 'uploads')));
   
-  // app.useGlobalGuards(new JwtAuthGuard(reflector));
+  app.useGlobalGuards(new JwtAuthGuard(reflector));
   app.enableCors({
     origin: 'http://localhost:3000',
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
