@@ -19,7 +19,30 @@ export class QuestionsController {
 
   @Get()
   @ApiOperation({ summary: 'Get all questions' })
-  @ApiResponse({ status: 200, description: 'List of all questions' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'List of all questions',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          subject: { type: 'string', enum: ['Math', 'English', 'Logic IQ'] },
+          type: { type: 'string', enum: ['MCQ', 'True or False', 'Yes or No', 'Matching', 'Fill in Blank'] },
+          questionText: { type: 'string' },
+          questionImage: { type: 'string', nullable: true },
+          correctAnswer: { type: 'string' },
+          score: { type: 'number' },
+          choices: { type: 'array', items: { type: 'object' } },
+          matchingPairs: { type: 'array', items: { type: 'object' } },
+          blanks: { type: 'array', items: { type: 'object' } },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' }
+        }
+      }
+    }
+  })
   async findAll() {
     return this.questionsService.findAll();
   }
@@ -27,7 +50,27 @@ export class QuestionsController {
   @Get(':id')
   @ApiOperation({ summary: 'Get a question by ID' })
   @ApiParam({ name: 'id', description: 'Question ID' })
-  @ApiResponse({ status: 200, description: 'Question details' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Question details',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        subject: { type: 'string', enum: ['Math', 'English', 'Logic IQ'] },
+        type: { type: 'string', enum: ['MCQ', 'True or False', 'Yes or No', 'Matching', 'Fill in Blank'] },
+        questionText: { type: 'string' },
+        questionImage: { type: 'string', nullable: true },
+        correctAnswer: { type: 'string' },
+        score: { type: 'number' },
+        choices: { type: 'array', items: { type: 'object' } },
+        matchingPairs: { type: 'array', items: { type: 'object' } },
+        blanks: { type: 'array', items: { type: 'object' } },
+        createdAt: { type: 'string', format: 'date-time' },
+        updatedAt: { type: 'string', format: 'date-time' }
+      }
+    }
+  })
   @ApiResponse({ status: 404, description: 'Question not found' })
   async findOne(@Param('id') id: string) {
     return this.questionsService.findOne(id);
@@ -36,6 +79,27 @@ export class QuestionsController {
   @Post()
   @ApiOperation({ summary: 'Create a new question' })
   @ApiConsumes('multipart/form-data')
+  @ApiResponse({
+    status: 201,
+    description: 'Question created successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        subject: { type: 'string', enum: ['Math', 'English', 'Logic IQ'] },
+        type: { type: 'string', enum: ['MCQ', 'True or False', 'Yes or No', 'Matching', 'Fill in Blank'] },
+        questionText: { type: 'string' },
+        questionImage: { type: 'string', nullable: true },
+        correctAnswer: { type: 'string' },
+        score: { type: 'number' },
+        choices: { type: 'array', items: { type: 'object' } },
+        matchingPairs: { type: 'array', items: { type: 'object' } },
+        blanks: { type: 'array', items: { type: 'object' } },
+        createdAt: { type: 'string', format: 'date-time' },
+        updatedAt: { type: 'string', format: 'date-time' }
+      }
+    }
+  })
   @ApiBody({
     schema: {
       type: 'object',
@@ -44,6 +108,7 @@ export class QuestionsController {
         type: { type: 'string', enum: ['MCQ', 'True or False', 'Yes or No', 'Matching', 'Fill in Blank'] },
         questionText: { type: 'string' },
         correctAnswer: { type: 'string' },
+        score: { type: 'number' },
         choices: { 
           type: 'array',
           items: {
@@ -138,6 +203,27 @@ export class QuestionsController {
   @ApiOperation({ summary: 'Update a question' })
   @ApiParam({ name: 'id', description: 'Question ID' })
   @ApiConsumes('multipart/form-data')
+  @ApiResponse({
+    status: 200,
+    description: 'Question updated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        subject: { type: 'string', enum: ['Math', 'English', 'Logic IQ'] },
+        type: { type: 'string', enum: ['MCQ', 'True or False', 'Yes or No', 'Matching', 'Fill in Blank'] },
+        questionText: { type: 'string' },
+        questionImage: { type: 'string', nullable: true },
+        correctAnswer: { type: 'string' },
+        score: { type: 'number' },
+        choices: { type: 'array', items: { type: 'object' } },
+        matchingPairs: { type: 'array', items: { type: 'object' } },
+        blanks: { type: 'array', items: { type: 'object' } },
+        createdAt: { type: 'string', format: 'date-time' },
+        updatedAt: { type: 'string', format: 'date-time' }
+      }
+    }
+  })
   @ApiBody({
     schema: {
       type: 'object',
@@ -146,6 +232,7 @@ export class QuestionsController {
         type: { type: 'string', enum: ['MCQ', 'True or False', 'Yes or No', 'Matching', 'Fill in Blank'] },
         questionText: { type: 'string' },
         correctAnswer: { type: 'string' },
+        score: { type: 'number' },
         choices: { 
           type: 'array',
           items: {

@@ -1,4 +1,4 @@
-import { IsString, IsArray, IsOptional, ValidateNested, IsEnum } from 'class-validator';
+import { IsString, IsArray, IsOptional, ValidateNested, IsEnum, IsNumber, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { QuestionType, SubjectType } from 'src/types/questions';
@@ -55,6 +55,12 @@ export class CreateQuestionDto {
   @ApiProperty({ description: 'Correct answer for True/False, Yes/No, or MCQ' })
   @IsString()
   correctAnswer: string;
+
+  @ApiProperty({ description: 'Score for the question', default: 4.0 })
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  score: number;
 
   @ApiProperty({ description: 'Choices for MCQ questions', type: [ChoiceDto], required: false })
   @IsArray()

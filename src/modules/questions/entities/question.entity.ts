@@ -1,5 +1,5 @@
 import { QuestionType, SubjectType } from 'src/types/questions';
-import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
  
 @Entity({ name: 'questions' })
 export class Question {
@@ -35,4 +35,13 @@ export class Question {
 
   @Column('jsonb', { nullable: true })
   blanks: { answer: string }[];
+
+  @Column({ type: 'float', default: 1.0 })
+  score: number;
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 }

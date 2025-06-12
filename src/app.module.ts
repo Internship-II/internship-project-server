@@ -10,7 +10,7 @@ import { MailController } from './modules/mail/mail.controller';
 import { MailModule } from './modules/mail/mail.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { Reflector } from '@nestjs/core';
-import { FileUploadModule } from './modules/upload/upload.module';
+import { UploadModule } from './modules/upload/upload.module';
 import { QuestionsModule } from './modules/questions/questions.module';
  
 
@@ -36,7 +36,7 @@ import { QuestionsModule } from './modules/questions/questions.module';
     UsersModule,
     AuthModule,
     MailModule,
-    FileUploadModule,
+    UploadModule,
     QuestionsModule,
    ],
   controllers: [AppController, MailController],

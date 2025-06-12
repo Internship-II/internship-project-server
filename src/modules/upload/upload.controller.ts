@@ -1,4 +1,4 @@
-import { Controller, Post, UploadedFile, UseInterceptors, Get, Param, Res, Delete } from '@nestjs/common';
+import { Controller, Post, UploadedFile, UseInterceptors, Get, Param, Res, Delete, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { File } from './entities/file.entity';
@@ -27,8 +27,15 @@ export class FileUploadController {
 
   @Delete(':id')
   async deleteFile(@Param('id') id: string) {
-    await this.fileStorageService.deleteFile(id);
-    return { message: 'File deleted successfully' };
+    try {
+      await this.fileStorageService.deleteFile(id);
+      return { message: 'File deleted successfully' };
+    } catch (error) {
+      if (error.message === 'File not found') {
+        throw new NotFoundException('File not found');
+      }
+      throw new InternalServerErrorException('Failed to delete file');
+    }
   }
 
   @Public()

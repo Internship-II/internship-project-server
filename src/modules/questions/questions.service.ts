@@ -27,8 +27,8 @@ export class QuestionsService {
   }
 
   async create(createQuestionDto: CreateQuestionDto, files?: { questionImage?: Express.Multer.File[]; choiceImages?: Express.Multer.File[] }) {
-    if (!createQuestionDto.questionText || !createQuestionDto.type || !createQuestionDto.subject) {
-      throw new BadRequestException('Question text, type, and subject are required');
+    if (!createQuestionDto.questionText || !createQuestionDto.type || !createQuestionDto.subject || !createQuestionDto.score) {
+      throw new BadRequestException('Question text, type, subject, and score are required');
     }
 
     const question = new Question();
@@ -36,6 +36,7 @@ export class QuestionsService {
     question.type = createQuestionDto.type;
     question.questionText = createQuestionDto.questionText;
     question.correctAnswer = createQuestionDto.correctAnswer || '';
+    question.score = createQuestionDto.score;
 
     const choices = typeof createQuestionDto.choices === 'string' 
       ? JSON.parse(createQuestionDto.choices) 
@@ -96,6 +97,7 @@ export class QuestionsService {
     question.type = updateQuestionDto.type || question.type;
     question.questionText = updateQuestionDto.questionText || question.questionText;
     question.correctAnswer = updateQuestionDto.correctAnswer || question.correctAnswer;
+    question.score = updateQuestionDto.score ?? question.score;
     question.choices = (updateQuestionDto.choices || question.choices).map(choice => ({
       text: choice.text || null,
       image: choice.image || null,

@@ -4,6 +4,7 @@ import * as path from 'path';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { File } from './entities/file.entity';
+import { Question } from '../questions/entities/question.entity';
 
 @Injectable()
 export class FileStorageService {
@@ -12,6 +13,8 @@ export class FileStorageService {
   constructor(
     @InjectRepository(File)
     private readonly fileRepository: Repository<File>,
+    @InjectRepository(Question)
+    private readonly questionRepository: Repository<Question>,
   ) {
     this.ensureUploadDirectoryExists();
   }
@@ -52,12 +55,41 @@ export class FileStorageService {
   }
 
   async deleteFile(fileId: string): Promise<void> {
-    const fileDetails = await this.fileRepository.findOne({ where: { id: fileId } });
-    if (!fileDetails) throw new Error('File not found');
+    try {
+      const fileDetails = await this.fileRepository.findOne({ where: { id: fileId } });
+      if (!fileDetails) {
+        throw new Error('File not found');
+      }
 
-    const filePath = path.join(this.uploadDirectory, fileDetails.filename);
-    await fs.unlink(filePath);
-    await this.fileRepository.delete(fileId);
+      const filePath = path.join(this.uploadDirectory, fileDetails.filename);
+      
+      // Check if file exists before trying to delete
+      try {
+        await fs.access(filePath);
+      } catch (err) {
+        // File doesn't exist on disk, but we'll still delete the DB record
+        console.log(`File not found on disk: ${filePath}`);
+      }
+
+      // Try to delete the file if it exists
+      try {
+        await fs.unlink(filePath);
+      } catch (err) {
+        console.error(`Error deleting file from disk: ${err.message}`);
+      }
+
+      // Update all questions that reference this file
+      await this.questionRepository.update(
+        { questionImage: fileId },
+        { questionImage: '' }
+      );
+
+      // Delete the database record
+      await this.fileRepository.delete(fileId);
+    } catch (error) {
+      console.error(`Error in deleteFile: ${error.message}`);
+      throw error;
+    }
   }
 
   async listFiles(): Promise<File[]> {
