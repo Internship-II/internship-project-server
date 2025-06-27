@@ -36,7 +36,7 @@ export class Question {
   @Column('jsonb', { nullable: true })
   blanks: { answer: string }[];
 
-  @Column({ type: 'float', default: 1.0 })
+  @Column({ type: 'float' })
   score: number;
 
   @CreateDateColumn()

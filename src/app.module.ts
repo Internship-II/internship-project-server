@@ -12,6 +12,8 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { Reflector } from '@nestjs/core';
 import { UploadModule } from './modules/upload/upload.module';
 import { QuestionsModule } from './modules/questions/questions.module';
+import { TestsModule } from './modules/tests/tests.module';
+import { TestResultsModule } from './modules/test-results/test-results.module';
  
 
 @Module({
@@ -38,6 +40,8 @@ import { QuestionsModule } from './modules/questions/questions.module';
     MailModule,
     UploadModule,
     QuestionsModule,
+    TestsModule,
+    TestResultsModule,
    ],
   controllers: [AppController, MailController],
   providers: [
