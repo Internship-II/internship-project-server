@@ -633,11 +633,14 @@ export class TestResultsService {
       if (isCorrect) {
         calculatedScore += question.score;
       }
+      else {
+        calculatedScore -= question.score * 0.5;
+      }
 
       questionResults.push({
         questionId: question.id,
         isCorrect,
-        score: isCorrect ? question.score : 0,
+        score: isCorrect ? question.score : - (question.score * 0.5),
         reason
       });
     }
