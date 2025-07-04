@@ -40,6 +40,60 @@ import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBearerAuth } from '@ne
 export class TestResultsController {
   constructor(private readonly testResultsService: TestResultsService) {}
 
+  @Post(':id/start')
+  @ApiOperation({ summary: 'Start a new test attempt' })
+  @ApiParam({ name: 'id', description: 'Test ID' })
+  @ApiResponse({
+    status: 201,
+    description: 'Test attempt started successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        test: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            subject: { type: 'string' },
+            duration: { type: 'number' },
+            numOfQuestion: { type: 'number' },
+            questionPerPage: { type: 'number' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' }
+          }
+        },
+        user: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' }
+          }
+        },
+        answers: { type: 'object' },
+        score: { type: 'number' },
+        totalScore: { type: 'number' },
+        percentageScore: { type: 'number' },
+        questionResults: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              questionId: { type: 'string' },
+              isCorrect: { type: 'boolean' },
+              score: { type: 'number' },
+              reason: { type: 'string' }
+            }
+          }
+        },
+        submittedAt: { type: 'string', format: 'date-time' }
+      }
+    }
+  })
+  @ApiResponse({ status: 404, description: 'Test or user not found' })
+  async startTest(@Param('id') testId: string, @Request() req): Promise<TestResult> {
+    const userId = req.user.id; // From JWT payload
+    return this.testResultsService.startTest(testId, userId);
+  }
+
   @Post(':id/submit')
   @ApiOperation({ summary: 'Submit answers for a test' })
   @ApiParam({ name: 'id', description: 'Test ID' })
@@ -55,7 +109,7 @@ export class TestResultsController {
           properties: {
             id: { type: 'string' },
             subject: { type: 'string' },
-            duration: { type: 'string' },
+            duration: { type: 'number' },
             numOfQuestion: { type: 'number' },
             questionPerPage: { type: 'number' },
             createdAt: { type: 'string', format: 'date-time' },
@@ -114,7 +168,7 @@ export class TestResultsController {
             properties: {
               id: { type: 'string' },
               subject: { type: 'string' },
-              duration: { type: 'string' },
+              duration: { type: 'number' },
               numOfQuestion: { type: 'number' },
               questionPerPage: { type: 'number' },
               createdAt: { type: 'string', format: 'date-time' },

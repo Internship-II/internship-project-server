@@ -33,7 +33,7 @@
 // } 
 
 
-import { IsString, IsInt, Min } from 'class-validator';
+import { IsString, IsInt, Min, IsBoolean, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateTestDto {
@@ -42,8 +42,8 @@ export class CreateTestDto {
   subject: string;
 
   @ApiProperty({ description: 'Duration of the test' })
-  @IsString()
-  duration: string;
+  @IsInt()
+  duration: number;
 
   @ApiProperty({ description: 'Number of questions in the test' })
   @IsInt()

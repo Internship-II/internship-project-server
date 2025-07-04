@@ -1,5 +1,5 @@
 // src/test-results/test-result.entity.ts
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, UpdateDateColumn, CreateDateColumn } from 'typeorm';
 import { Test } from '../../tests/entities/test.entity';
 import { User } from '../../users/entities/user.entity';
 import { QuestionResult } from 'src/types/question-result';
@@ -30,6 +30,18 @@ export class TestResult {
   @Column({ type: 'jsonb' })
   questionResults: QuestionResult[];
 
-  @Column()
-  submittedAt: Date;
+  @Column({ type: 'timestamp with time zone', nullable: true })
+  submittedAt: Date | null;
+
+  @Column({ type: 'timestamp with time zone', nullable: true })
+  endedAt: Date | null;
+  
+  @CreateDateColumn({ type: 'timestamp with time zone' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ type: 'timestamp with time zone' })
+  updatedAt: Date;
+
+  @Column({ type: 'int'})
+  duration: number ; // Duration in seconds (e.g., 1230 for 20 minutes 30 seconds)
 }

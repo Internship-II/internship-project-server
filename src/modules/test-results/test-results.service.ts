@@ -1,6 +1,6 @@
 // import { Injectable, NotFoundException } from '@nestjs/common';
 // import { InjectRepository } from '@nestjs/typeorm';
-// import { Repository, In } from 'typeorm';
+// import { Repository, In, IsNull } from 'typeorm';
 // import { TestResult } from './entities/test-result.entity';
 // import { Test } from '../tests/entities/test.entity';
 // import { User } from '../users/entities/user.entity';    
@@ -20,6 +20,47 @@
 //     @InjectRepository(Question)
 //     private questionRepository: Repository<Question>,
 //   ) {}
+
+//   async findByUser(userId: string): Promise<TestResult[]> {
+//     console.log('=== DEBUG: findByUser called ===');
+//     console.log('userId:', userId);
+
+//     const user = await this.userRepository.findOne({ where: { id: userId } });
+//     if (!user) {
+//       throw new NotFoundException(`User with ID ${userId} not found`);
+//     }
+
+//     const testResults = await this.testResultRepository.find({
+//       where: { user: { id: userId } },
+//       relations: ['test'],
+//       order: { submittedAt: 'DESC' },
+//     });
+
+//     console.log('testResults found:', testResults.length);
+
+//     // Fetch question details for each test result
+//     for (const result of testResults) {
+//       const questionIds = result.questionResults.map(qr => qr.questionId);
+//       const questions = await this.questionRepository.findBy({ id: In(questionIds) });
+//       console.log(`Questions for test result ${result.id}:`, questions.map(q => ({ id: q.id, questionText: q.questionText })));
+
+//       // Attach question details to questionResults
+//       result.questionResults = result.questionResults.map(qr => {
+//         const question = questions.find(q => q.id === qr.questionId);
+//         return {
+//           ...qr,
+//           questionText: question ? question.questionText : 'Question not found',
+//           questionType: question ? question.type : 'Unknown',
+//           choices: question ? question.choices : [],
+//           correctAnswer: question ? question.correctAnswer : null,
+//           matchingPairs: question ? question.matchingPairs : [],
+//           blanks: question ? question.blanks : [],
+//         };
+//       });
+//     }
+
+//     return testResults;
+//   }
 
 //   async submitAnswers(
 //     testId: string,
@@ -41,7 +82,18 @@
 //       throw new NotFoundException(`User with ID ${userId} not found`);
 //     }
 
-//     // Fetch questions based on provided questionIds
+//     // Find the existing test result for this user and test that hasn't been submitted yet
+//     const existingTestResult = await this.testResultRepository.findOne({
+//       where: {
+//         test: { id: testId },
+//         user: { id: userId },
+//         submittedAt: IsNull(),
+//       },
+//     });
+//     if (!existingTestResult) {
+//       throw new NotFoundException('No started test found for this user and test.');
+//     }
+
 //     const questions = await this.questionRepository.findBy({ id: In(payload.questionIds) });
 //     if (questions.length !== payload.questionIds.length) {
 //       const foundIds = questions.map(q => q.id);
@@ -53,7 +105,6 @@
 //     console.log('questionIds:', payload.questionIds);
 //     console.log('questions data:', questions.map(q => ({ id: q.id, type: q.type, score: q.score })));
 
-//     // Calculate score
 //     let calculatedScore = 0;
 //     let totalPossibleScore = 0;
 //     const questionResults: QuestionResult[] = [];
@@ -74,7 +125,6 @@
 //         blanks: question.blanks
 //       });
       
-//       // Check if user provided any answer
 //       const hasAnswer = userAnswer && (
 //         (userAnswer.text !== undefined && userAnswer.text !== null && userAnswer.text !== '') ||
 //         (Array.isArray(userAnswer) && userAnswer.length > 0) ||
@@ -278,11 +328,16 @@
 //       if (isCorrect) {
 //         calculatedScore += question.score;
 //       }
+//       else {
+//         calculatedScore -= question.score * 0.5;
+//       }
+      
+//       calculatedScore = Math.max(0, calculatedScore);
 
 //       questionResults.push({
 //         questionId: question.id,
 //         isCorrect,
-//         score: isCorrect ? question.score : 0,
+//         score: isCorrect ? question.score : - (question.score * 0.5),
 //         reason
 //       });
 //     }
@@ -297,27 +352,66 @@
 //     console.log('percentageScore:', percentageScore);
 //     console.log('questionResults:', questionResults);
 
+//     // Update the existing test result
+//     existingTestResult.answers = payload.answers;
+//     existingTestResult.score = calculatedScore;
+//     existingTestResult.totalScore = totalPossibleScore;
+//     existingTestResult.percentageScore = percentageScore;
+//     existingTestResult.questionResults = questionResults;
+//     existingTestResult.submittedAt = new Date();
+    
+//     // Calculate duration in seconds
+//     const durationMs = existingTestResult.submittedAt.getTime() - existingTestResult.createdAt.getTime();
+//     existingTestResult.duration = Math.floor(durationMs / 1000);
+
+//     return this.testResultRepository.save(existingTestResult);
+//   }
+
+//   // New method to handle "Take Test" action
+//   async startTest(testId: string, userId: string): Promise<TestResult> {
+//     console.log('=== DEBUG: startTest called ===');
+//     console.log('testId:', testId);
+//     console.log('userId:', userId);
+
+//     const test = await this.testRepository.findOne({ where: { id: testId } });
+//     if (!test) {
+//       throw new NotFoundException(`Test with ID ${testId} not found`);
+//     }
+
+//     const user = await this.userRepository.findOne({ where: { id: userId } });
+//     if (!user) {
+//       throw new NotFoundException(`User with ID ${userId} not found`);
+//     }
+
+//     const now = new Date(); 
+//     const testDuration = test.duration; // test.duration is in minutes
+//     const testEndedAt = new Date(now.getTime() + testDuration * 60 * 1000); // Convert minutes to milliseconds
+
+//     console.log('testEndedAt:', testEndedAt);
+    
+//     // Create a new test result with submittedAt: null
 //     const testResult = this.testResultRepository.create({
 //       test,
 //       user,
-//       answers: payload.answers,
-//       score: calculatedScore,
-//       totalScore: totalPossibleScore,
-//       percentageScore: percentageScore,
-//       questionResults,
-//       submittedAt: new Date(),
+//       answers: {},
+//       score: 0,
+//       totalScore: 0,
+//       percentageScore: 0,
+//       questionResults: [],
+//       submittedAt: null,
+//       createdAt: now,
+//       endedAt: testEndedAt,
+//       duration: 0,
 //     });
 
-//     return this.testResultRepository.save(testResult);
+//     return await this.testResultRepository.save(testResult);
 //   }
 // }
 
 
-
-
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, IsNull } from 'typeorm';
 import { TestResult } from './entities/test-result.entity';
 import { Test } from '../tests/entities/test.entity';
 import { User } from '../users/entities/user.entity';    
@@ -397,6 +491,18 @@ export class TestResultsService {
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
+    // Find the existing test result for this user and test that hasn't been submitted yet
+    const existingTestResult = await this.testResultRepository.findOne({
+      where: {
+        test: { id: testId },
+        user: { id: userId },
+        submittedAt: IsNull(),
+      },
+    });
+    if (!existingTestResult) {
+      throw new NotFoundException('No started test found for this user and test.');
     }
 
     const questions = await this.questionRepository.findBy({ id: In(payload.questionIds) });
@@ -636,6 +742,8 @@ export class TestResultsService {
       else {
         calculatedScore -= question.score * 0.5;
       }
+      
+      calculatedScore = Math.max(0, calculatedScore);
 
       questionResults.push({
         questionId: question.id,
@@ -655,17 +763,58 @@ export class TestResultsService {
     console.log('percentageScore:', percentageScore);
     console.log('questionResults:', questionResults);
 
+    // Update the existing test result
+    existingTestResult.answers = payload.answers;
+    existingTestResult.score = calculatedScore;
+    existingTestResult.totalScore = totalPossibleScore;
+    existingTestResult.percentageScore = percentageScore;
+    existingTestResult.questionResults = questionResults;
+    existingTestResult.submittedAt = new Date();
+    
+    // Calculate duration in seconds
+    const durationMs = existingTestResult.submittedAt.getTime() - existingTestResult.createdAt.getTime();
+    existingTestResult.duration = Math.floor(durationMs / 1000);
+
+    return this.testResultRepository.save(existingTestResult);
+  }
+
+  // New method to handle "Take Test" action
+  async startTest(testId: string, userId: string): Promise<TestResult> {
+    console.log('=== DEBUG: startTest called ===');
+    console.log('testId:', testId);
+    console.log('userId:', userId);
+
+    const test = await this.testRepository.findOne({ where: { id: testId } });
+    if (!test) {
+      throw new NotFoundException(`Test with ID ${testId} not found`);
+    }
+
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
+    const now = new Date(); 
+    const testDuration = test.duration; // test.duration is in minutes
+    const testEndedAt = new Date(now.getTime() + testDuration * 60 * 1000); // Convert minutes to milliseconds
+
+    console.log('testEndedAt:', testEndedAt);
+ 
+    // Create a new test result with submittedAt: null
     const testResult = this.testResultRepository.create({
       test,
       user,
-      answers: payload.answers,
-      score: calculatedScore,
-      totalScore: totalPossibleScore,
-      percentageScore: percentageScore,
-      questionResults,
-      submittedAt: new Date(),
+      answers: {},
+      score: 0,
+      totalScore: 0,
+      percentageScore: 0,
+      questionResults: [],
+      submittedAt: null,
+      createdAt: now,
+      endedAt: testEndedAt,
+      duration: 0,
     });
 
-    return this.testResultRepository.save(testResult);
+    return await this.testResultRepository.save(testResult);
   }
 }

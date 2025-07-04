@@ -33,6 +33,7 @@ import { TestResultsModule } from './modules/test-results/test-results.module';
         database: configService.get('DB_NAME'),        
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
         synchronize: true, // set to false in production
+        timezone: '+07:00',
       }),
     }),
     UsersModule,

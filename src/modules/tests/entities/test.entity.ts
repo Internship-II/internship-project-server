@@ -9,8 +9,8 @@ export class Test {
   @Column()
   subject: string;
 
-  @Column()
-  duration: string;
+  @Column({ type: 'int' }) 
+  duration: number;
 
   @Column({ type: 'int' })
   numOfQuestion: number;

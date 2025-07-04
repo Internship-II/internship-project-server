@@ -49,9 +49,9 @@ export class UpdateTestDto {
   subject?: string;
 
   @ApiProperty({ description: 'Duration of the test', required: false })
-  @IsString()
+  @IsInt()
   @IsOptional()
-  duration?: string;
+  duration?: number ;
 
   @ApiProperty({ description: 'Number of questions in the test', required: false })
   @IsInt()

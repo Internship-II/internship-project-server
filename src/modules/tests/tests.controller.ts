@@ -270,7 +270,7 @@ export class TestsController {
         properties: {
           id: { type: 'string' },
           subject: { type: 'string' },
-          duration: { type: 'string' },
+          duration: { type: 'number' },
           numOfQuestion: { type: 'number' },
           questionPerPage: { type: 'number' },
           createdAt: { type: 'string', format: 'date-time' },
@@ -294,7 +294,7 @@ export class TestsController {
       properties: {
         id: { type: 'string' },
         subject: { type: 'string' },
-        duration: { type: 'string' },
+        duration: { type: 'number' },
         numOfQuestion: { type: 'number' },
         questionPerPage: { type: 'number' },
         createdAt: { type: 'string', format: 'date-time' },
@@ -359,7 +359,7 @@ export class TestsController {
       properties: {
         id: { type: 'string' },
         subject: { type: 'string' },
-        duration: { type: 'string' },
+        duration: { type: 'number' },
         numOfQuestion: { type: 'number' },
         questionPerPage: { type: 'number' },
         createdAt: { type: 'string', format: 'date-time' },
@@ -434,7 +434,7 @@ export class TestsController {
       properties: {
         id: { type: 'string' },
         subject: { type: 'string' },
-        duration: { type: 'string' },
+        duration: { type: 'number' },
         numOfQuestion: { type: 'number' },
         questionPerPage: { type: 'number' },
         createdAt: { type: 'string', format: 'date-time' },
