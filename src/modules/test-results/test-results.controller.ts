@@ -27,7 +27,7 @@
 // }
 
 
-import { Controller, Post, Get, Body, Param, Request, UseGuards, Put } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Request, UseGuards, Put, Query } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { TestResultsService } from './test-results.service';
 import { TestResult } from './entities/test-result.entity';
@@ -256,6 +256,66 @@ export class TestResultsController {
     return this.testResultsService.findByUser(userId);
   }
 
+  @Get('leaderboard')
+  @ApiOperation({ summary: 'Get leaderboard with different sorting options' })
+  @ApiResponse({
+    status: 200,
+    description: 'Leaderboard retrieved successfully',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          rank: { type: 'number' },
+          userId: { type: 'string' },
+          username: { type: 'string' },
+          email: { type: 'string' },
+          testId: { type: 'string' },
+          testSubject: { type: 'string' },
+          score: { type: 'number' },
+          totalScore: { type: 'number' },
+          percentageScore: { type: 'number' },
+          duration: { type: 'number' },
+          durationFormatted: { type: 'string' },
+          submittedAt: { type: 'string', format: 'date-time' },
+          questionResults: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                questionId: { type: 'string' },
+                isCorrect: { type: 'boolean' },
+                score: { type: 'number' },
+                reason: { type: 'string' }
+              }
+            }
+          }
+        }
+      }
+    }
+  })
+  async getLeaderboard(
+    @Request() req,
+    @Query('testId') testId?: string,
+    @Query('sortBy') sortBy?: 'percentageScore' | 'score' | 'duration',
+    @Query('limit') limit?: number,
+    @Query('page') page?: number,
+  ): Promise<any[]> {
+    const defaultLimit = 10;
+    const maxLimit = 100;
+    
+    // Validate and sanitize limit
+    const sanitizedLimit = limit 
+      ? Math.min(Math.max(limit, 1), maxLimit) 
+      : defaultLimit;
+
+    return this.testResultsService.getLeaderboard(
+      testId,
+      sortBy || 'percentageScore',
+      sanitizedLimit
+    );
+  }
+  
   @Get(':id/unsubmitted')
   @ApiOperation({ summary: 'Get unsubmitted test result for the authenticated user' })
   @ApiResponse({
@@ -458,4 +518,5 @@ export class TestResultsController {
     const userId = req.user.id;
     return this.testResultsService.saveAnswers(testResultId, userId, body);
   }
+  
 }

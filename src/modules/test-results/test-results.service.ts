@@ -425,7 +425,11 @@ export class TestResultsService {
     
     // Calculate duration in seconds
     const durationMs = testResult.submittedAt.getTime() - testResult.createdAt.getTime();
-    testResult.duration = Math.floor(durationMs / 1000);
+    const calculatedDuration = Math.floor(durationMs / 1000);
+    
+    // Cap duration at test's maximum duration (convert minutes to seconds)
+    const maxTestDuration = testResult.test.duration * 60;
+    testResult.duration = Math.min(calculatedDuration, maxTestDuration);
 
     return this.testResultRepository.save(testResult);
   }
@@ -496,5 +500,98 @@ export class TestResultsService {
     testResult.answers = payload.answers;
 
     return this.testResultRepository.save(testResult);
+  }
+
+  async getLeaderboard(
+    testId?: string,
+    sortBy: 'percentageScore' | 'score' | 'duration' = 'percentageScore',
+    limit: number = 10
+  ): Promise<any[]> {
+    console.log('=== DEBUG: getLeaderboard called ===');
+    console.log('testId:', testId);
+    console.log('sortBy:', sortBy);
+    console.log('limit:', limit);
+
+    // Build the query
+    let query = this.testResultRepository
+      .createQueryBuilder('testResult')
+      .leftJoinAndSelect('testResult.user', 'user')
+      .leftJoinAndSelect('testResult.test', 'test')
+      .where('testResult.submittedAt IS NOT NULL'); // Only submitted tests
+
+    // Filter by specific test if provided
+    if (testId) {
+      query = query.andWhere('testResult.test.id = :testId', { testId });
+    }
+
+    // Add sorting based on the sortBy parameter
+    switch (sortBy) {
+      case 'percentageScore':
+        query = query.orderBy('testResult.percentageScore', 'DESC');
+        break;
+      case 'score':
+        query = query.orderBy('testResult.score', 'DESC');
+        break;
+      case 'duration':
+        query = query.orderBy('testResult.duration', 'ASC'); // ASC for fastest first
+        break;
+      default:
+        query = query.orderBy('testResult.percentageScore', 'DESC');
+    }
+
+    // Add secondary sorting for ties
+    switch (sortBy) {
+      case 'percentageScore':
+        query = query.addOrderBy('testResult.duration', 'ASC'); // Fastest duration as tiebreaker
+        break;
+      case 'score':
+        query = query.addOrderBy('testResult.percentageScore', 'DESC'); // Higher percentage as tiebreaker
+        break;
+      case 'duration':
+        query = query.addOrderBy('testResult.percentageScore', 'DESC'); // Higher percentage as tiebreaker
+        break;
+    }
+
+    // Add tertiary sorting for further ties
+    query = query.addOrderBy('testResult.submittedAt', 'ASC'); // Earliest submission as final tiebreaker
+
+    // Limit results
+    query = query.limit(limit);
+
+    const results = await query.getMany();
+
+    console.log(`Found ${results.length} leaderboard entries`);
+
+    // Transform results to include rank and user info
+    const leaderboard = results.map((result, index) => ({
+      rank: index + 1,
+      userId: result.user.id,
+      username: result.user.name,
+      email: result.user.email,
+      testId: result.test.id,
+      testSubject: result.test.subject,
+      score: result.score,
+      totalScore: result.totalScore,
+      percentageScore: result.percentageScore,
+      duration: result.duration,
+      durationFormatted: this.formatDuration(result.duration),
+      submittedAt: result.submittedAt,
+      questionResults: result.questionResults
+    }));
+
+    return leaderboard;
+  }
+  private formatDuration(seconds: number): string {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainingSeconds = seconds % 60;
+
+    if (hours > 0) {
+      return `${hours}h ${minutes}m ${remainingSeconds}s`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${remainingSeconds}s`;
+    } else {
+      return `${remainingSeconds}s`;
+    }
   }
 }
