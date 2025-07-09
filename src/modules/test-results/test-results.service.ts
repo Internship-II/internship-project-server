@@ -1,414 +1,3 @@
-// import { Injectable, NotFoundException } from '@nestjs/common';
-// import { InjectRepository } from '@nestjs/typeorm';
-// import { Repository, In, IsNull } from 'typeorm';
-// import { TestResult } from './entities/test-result.entity';
-// import { Test } from '../tests/entities/test.entity';
-// import { User } from '../users/entities/user.entity';    
-// import { Question } from '../questions/entities/question.entity';
-// import { QuestionType } from 'src/types/questions';
-// import { QuestionResult } from 'src/types/question-result';
-
-// @Injectable()
-// export class TestResultsService {
-//   constructor(
-//     @InjectRepository(TestResult)
-//     private testResultRepository: Repository<TestResult>,
-//     @InjectRepository(Test)
-//     private testRepository: Repository<Test>,
-//     @InjectRepository(User)
-//     private userRepository: Repository<User>,
-//     @InjectRepository(Question)
-//     private questionRepository: Repository<Question>,
-//   ) {}
-
-//   async findByUser(userId: string): Promise<TestResult[]> {
-//     console.log('=== DEBUG: findByUser called ===');
-//     console.log('userId:', userId);
-
-//     const user = await this.userRepository.findOne({ where: { id: userId } });
-//     if (!user) {
-//       throw new NotFoundException(`User with ID ${userId} not found`);
-//     }
-
-//     const testResults = await this.testResultRepository.find({
-//       where: { user: { id: userId } },
-//       relations: ['test'],
-//       order: { submittedAt: 'DESC' },
-//     });
-
-//     console.log('testResults found:', testResults.length);
-
-//     // Fetch question details for each test result
-//     for (const result of testResults) {
-//       const questionIds = result.questionResults.map(qr => qr.questionId);
-//       const questions = await this.questionRepository.findBy({ id: In(questionIds) });
-//       console.log(`Questions for test result ${result.id}:`, questions.map(q => ({ id: q.id, questionText: q.questionText })));
-
-//       // Attach question details to questionResults
-//       result.questionResults = result.questionResults.map(qr => {
-//         const question = questions.find(q => q.id === qr.questionId);
-//         return {
-//           ...qr,
-//           questionText: question ? question.questionText : 'Question not found',
-//           questionType: question ? question.type : 'Unknown',
-//           choices: question ? question.choices : [],
-//           correctAnswer: question ? question.correctAnswer : null,
-//           matchingPairs: question ? question.matchingPairs : [],
-//           blanks: question ? question.blanks : [],
-//         };
-//       });
-//     }
-
-//     return testResults;
-//   }
-
-//   async submitAnswers(
-//     testId: string,
-//     userId: string,
-//     payload: { answers: Record<string, any>, questionIds: string[] },
-//   ): Promise<TestResult> {
-//     console.log('=== DEBUG: submitAnswers called ===');
-//     console.log('testId:', testId);
-//     console.log('userId:', userId);
-//     console.log('payload:', JSON.stringify(payload, null, 2));
-
-//     const test = await this.testRepository.findOne({ where: { id: testId } });
-//     if (!test) {
-//       throw new NotFoundException(`Test with ID ${testId} not found`);
-//     }
-
-//     const user = await this.userRepository.findOne({ where: { id: userId } });
-//     if (!user) {
-//       throw new NotFoundException(`User with ID ${userId} not found`);
-//     }
-
-//     // Find the existing test result for this user and test that hasn't been submitted yet
-//     const existingTestResult = await this.testResultRepository.findOne({
-//       where: {
-//         test: { id: testId },
-//         user: { id: userId },
-//         submittedAt: IsNull(),
-//       },
-//     });
-//     if (!existingTestResult) {
-//       throw new NotFoundException('No started test found for this user and test.');
-//     }
-
-//     const questions = await this.questionRepository.findBy({ id: In(payload.questionIds) });
-//     if (questions.length !== payload.questionIds.length) {
-//       const foundIds = questions.map(q => q.id);
-//       const missingIds = payload.questionIds.filter(id => !foundIds.includes(id));
-//       throw new NotFoundException(`Questions not found: ${missingIds.join(', ')}`);
-//     }
-
-//     console.log('questions found:', questions.length);
-//     console.log('questionIds:', payload.questionIds);
-//     console.log('questions data:', questions.map(q => ({ id: q.id, type: q.type, score: q.score })));
-
-//     let calculatedScore = 0;
-//     let totalPossibleScore = 0;
-//     const questionResults: QuestionResult[] = [];
-
-//     for (const question of questions) {
-//       totalPossibleScore += question.score;
-//       const userAnswer = payload.answers[question.id.toString()];
-      
-//       console.log(`Processing question ${question.id}:`, {
-//         questionType: question.type,
-//         questionScore: question.score,
-//         userAnswer: userAnswer,
-//         answerKey: question.id.toString(),
-//         questionText: question.questionText,
-//         correctAnswer: question.correctAnswer,
-//         choices: question.choices,
-//         matchingPairs: question.matchingPairs,
-//         blanks: question.blanks
-//       });
-      
-//       const hasAnswer = userAnswer && (
-//         (userAnswer.text !== undefined && userAnswer.text !== null && userAnswer.text !== '') ||
-//         (Array.isArray(userAnswer) && userAnswer.length > 0) ||
-//         Object.keys(userAnswer).some(key => key !== 'text' && userAnswer[key] !== undefined && userAnswer[key] !== null && userAnswer[key] !== '')
-//       );
-      
-//       console.log(`Answer detection for question ${question.id}:`, {
-//         userAnswer: userAnswer,
-//         userAnswerType: typeof userAnswer,
-//         isArray: Array.isArray(userAnswer),
-//         hasTextAnswer: userAnswer?.text !== undefined && userAnswer?.text !== null && userAnswer?.text !== '',
-//         hasIndexedAnswers: Object.keys(userAnswer || {}).some(key => key !== 'text' && userAnswer[key] !== undefined && userAnswer[key] !== null && userAnswer[key] !== ''),
-//         hasAnswer: hasAnswer,
-//         answerKeys: userAnswer ? Object.keys(userAnswer) : []
-//       });
-      
-//       if (!hasAnswer) {
-//         console.log(`No answer for question ${question.id}`);
-//         questionResults.push({
-//           questionId: question.id,
-//           isCorrect: false,
-//           score: 0,
-//           reason: 'No answer provided'
-//         });
-//         continue;
-//       }
-
-//       let isCorrect = false;
-//       let reason = '';
-
-//       switch (question.type) {
-//         case QuestionType.MCQ:
-//           console.log(`=== MCQ Question Processing ===`);
-//           const correctChoices = question.choices?.filter((c) => c.isCorrect) || [];
-//           const userSelectedChoices = Array.isArray(userAnswer.text) 
-//             ? userAnswer.text 
-//             : [userAnswer.text].filter(Boolean);
-          
-//           console.log(`MCQ Debug for question ${question.id}:`, {
-//             correctChoices: correctChoices.map(c => ({ text: c.text, isCorrect: c.isCorrect })),
-//             userSelectedChoices: userSelectedChoices,
-//             originalUserAnswer: userAnswer.text,
-//             isArray: Array.isArray(userAnswer.text),
-//             correctChoiceTexts: correctChoices.map(c => c.text),
-//             userChoiceTexts: userSelectedChoices
-//           });
-          
-//           const allCorrectSelected = correctChoices.every((choice: any) => 
-//             userSelectedChoices.includes(choice.text || "")
-//           );
-//           const noIncorrectSelected = userSelectedChoices.every((choice: string) => 
-//             correctChoices.some((correct: any) => correct.text === choice)
-//           );
-          
-//           console.log(`MCQ Comparison for question ${question.id}:`, {
-//             allCorrectSelected,
-//             noIncorrectSelected,
-//             userSelectedLength: userSelectedChoices.length,
-//             correctChoicesLength: correctChoices.length,
-//             userSelectedChoices,
-//             correctChoiceTexts: correctChoices.map(c => c.text)
-//           });
-          
-//           isCorrect = allCorrectSelected && 
-//                      noIncorrectSelected && 
-//                      userSelectedChoices.length === correctChoices.length;
-          
-//           reason = isCorrect 
-//             ? 'All correct choices selected' 
-//             : `Expected: ${correctChoices.map(c => c.text).join(', ')}, Got: ${userSelectedChoices.join(', ')}`;
-//           break;
-
-//         case QuestionType.TRUE_FALSE:
-//           console.log(`=== TRUE/FALSE Question Processing ===`);
-//           console.log(`True/False Debug for question ${question.id}:`, {
-//             questionType: question.type,
-//             questionText: question.questionText,
-//             correctAnswer: question.correctAnswer,
-//             userAnswer: userAnswer.text,
-//             choices: question.choices
-//           });
-          
-//           const normalizeAnswer = (answer: string) => {
-//             const normalized = answer.toLowerCase().trim();
-//             if (normalized === 'true' || normalized === 'yes') return 'Yes';
-//             if (normalized === 'false' || normalized === 'no') return 'No';
-//             return answer;
-//           };
-          
-//           const normalizedUserAnswer = normalizeAnswer(userAnswer.text);
-//           const normalizedCorrectAnswer = normalizeAnswer(question.correctAnswer);
-          
-//           isCorrect = normalizedUserAnswer === normalizedCorrectAnswer;
-//           reason = isCorrect 
-//             ? 'Correct answer' 
-//             : `Expected: ${question.correctAnswer}, Got: ${userAnswer.text}`;
-//           break;
-
-//         case QuestionType.YES_NO:
-//           console.log(`=== YES/NO Question Processing ===`);
-//           console.log(`Yes/No Debug for question ${question.id}:`, {
-//             questionType: question.type,
-//             questionText: question.questionText,
-//             correctAnswer: question.correctAnswer,
-//             userAnswer: userAnswer.text,
-//             choices: question.choices
-//           });
-          
-//           const normalizeYesNoAnswer = (answer: string) => {
-//             const normalized = answer.toLowerCase().trim();
-//             if (normalized === 'true' || normalized === 'yes') return 'Yes';
-//             if (normalized === 'false' || normalized === 'no') return 'No';
-//             return answer;
-//           };
-          
-//           const normalizedYesNoUserAnswer = normalizeYesNoAnswer(userAnswer.text);
-//           const normalizedYesNoCorrectAnswer = normalizeYesNoAnswer(question.correctAnswer);
-          
-//           console.log(`Yes/No Comparison for question ${question.id}:`, {
-//             originalUserAnswer: userAnswer.text,
-//             originalCorrectAnswer: question.correctAnswer,
-//             normalizedUserAnswer: normalizedYesNoUserAnswer,
-//             normalizedCorrectAnswer: normalizedYesNoCorrectAnswer,
-//             isCorrect: normalizedYesNoUserAnswer === normalizedYesNoCorrectAnswer
-//           });
-          
-//           isCorrect = normalizedYesNoUserAnswer === normalizedYesNoCorrectAnswer;
-//           reason = isCorrect 
-//             ? 'Correct answer' 
-//             : `Expected: ${question.correctAnswer}, Got: ${userAnswer.text}`;
-//           break;
-
-//         case QuestionType.MATCHING:
-//           console.log(`=== MATCHING Question Processing ===`);
-//           console.log(`Matching Debug for question ${question.id}:`, {
-//             matchingPairs: question.matchingPairs,
-//             userAnswer: userAnswer,
-//             userAnswerType: typeof userAnswer,
-//             isArray: Array.isArray(userAnswer),
-//             userAnswersArray: Object.keys(userAnswer).map(key => ({ index: key, answer: userAnswer[key] }))
-//           });
-          
-//           if (Array.isArray(userAnswer) && userAnswer.length === 0) {
-//             console.log(`Matching question ${question.id} received empty array - no answers provided`);
-//             reason = 'No matching answers provided';
-//             isCorrect = false;
-//           } else if (Array.isArray(userAnswer)) {
-//             isCorrect = question.matchingPairs?.every(
-//               (pair, idx) => userAnswer[idx] === pair.answer,
-//             ) || false;
-//             reason = isCorrect 
-//               ? 'All matching pairs correct' 
-//               : 'Some matching pairs incorrect';
-//           } else {
-//             isCorrect = question.matchingPairs?.every(
-//               (pair, idx) => userAnswer[idx.toString()] === pair.answer,
-//             ) || false;
-//             reason = isCorrect 
-//               ? 'All matching pairs correct' 
-//               : 'Some matching pairs incorrect';
-//           }
-//           break;
-
-//         case QuestionType.FILL_BLANK:
-//           console.log(`=== FILL BLANK Question Processing ===`);
-//           console.log(`Fill Blank Debug for question ${question.id}:`, {
-//             blanks: question.blanks,
-//             userAnswer: userAnswer,
-//             userAnswerType: typeof userAnswer,
-//             isArray: Array.isArray(userAnswer),
-//             userAnswersArray: Object.keys(userAnswer).map(key => ({ index: key, answer: userAnswer[key] }))
-//           });
-          
-//           if (Array.isArray(userAnswer) && userAnswer.length === 0) {
-//             console.log(`Fill blank question ${question.id} received empty array - no answers provided`);
-//             reason = 'No blank answers provided';
-//             isCorrect = false;
-//           } else if (Array.isArray(userAnswer)) {
-//             isCorrect = question.blanks?.every(
-//               (blank, idx) => userAnswer[idx] === blank.answer,
-//             ) || false;
-//             reason = isCorrect 
-//               ? 'All blanks filled correctly' 
-//               : 'Some blanks incorrect';
-//           } else {
-//             isCorrect = question.blanks?.every(
-//               (blank, idx) => userAnswer[idx.toString()] === blank.answer,
-//             ) || false;
-//             reason = isCorrect 
-//               ? 'All blanks filled correctly' 
-//               : 'Some blanks incorrect';
-//           }
-//           break;
-
-//         default:
-//           console.log(`=== UNKNOWN Question Type: ${question.type} ===`);
-//           reason = `Unknown question type: ${question.type}`;
-//           break;
-//       }
-
-//       if (isCorrect) {
-//         calculatedScore += question.score;
-//       }
-//       else {
-//         calculatedScore -= question.score * 0.5;
-//       }
-      
-//       calculatedScore = Math.max(0, calculatedScore);
-
-//       questionResults.push({
-//         questionId: question.id,
-//         isCorrect,
-//         score: isCorrect ? question.score : - (question.score * 0.5),
-//         reason
-//       });
-//     }
-
-//     const percentageScore = totalPossibleScore > 0 
-//       ? (calculatedScore / totalPossibleScore) * 100 
-//       : 0;
-
-//     console.log('=== FINAL RESULTS ===');
-//     console.log('calculatedScore:', calculatedScore);
-//     console.log('totalPossibleScore:', totalPossibleScore);
-//     console.log('percentageScore:', percentageScore);
-//     console.log('questionResults:', questionResults);
-
-//     // Update the existing test result
-//     existingTestResult.answers = payload.answers;
-//     existingTestResult.score = calculatedScore;
-//     existingTestResult.totalScore = totalPossibleScore;
-//     existingTestResult.percentageScore = percentageScore;
-//     existingTestResult.questionResults = questionResults;
-//     existingTestResult.submittedAt = new Date();
-    
-//     // Calculate duration in seconds
-//     const durationMs = existingTestResult.submittedAt.getTime() - existingTestResult.createdAt.getTime();
-//     existingTestResult.duration = Math.floor(durationMs / 1000);
-
-//     return this.testResultRepository.save(existingTestResult);
-//   }
-
-//   // New method to handle "Take Test" action
-//   async startTest(testId: string, userId: string): Promise<TestResult> {
-//     console.log('=== DEBUG: startTest called ===');
-//     console.log('testId:', testId);
-//     console.log('userId:', userId);
-
-//     const test = await this.testRepository.findOne({ where: { id: testId } });
-//     if (!test) {
-//       throw new NotFoundException(`Test with ID ${testId} not found`);
-//     }
-
-//     const user = await this.userRepository.findOne({ where: { id: userId } });
-//     if (!user) {
-//       throw new NotFoundException(`User with ID ${userId} not found`);
-//     }
-
-//     const now = new Date(); 
-//     const testDuration = test.duration; // test.duration is in minutes
-//     const testEndedAt = new Date(now.getTime() + testDuration * 60 * 1000); // Convert minutes to milliseconds
-
-//     console.log('testEndedAt:', testEndedAt);
-    
-//     // Create a new test result with submittedAt: null
-//     const testResult = this.testResultRepository.create({
-//       test,
-//       user,
-//       answers: {},
-//       score: 0,
-//       totalScore: 0,
-//       percentageScore: 0,
-//       questionResults: [],
-//       submittedAt: null,
-//       createdAt: now,
-//       endedAt: testEndedAt,
-//       duration: 0,
-//     });
-
-//     return await this.testResultRepository.save(testResult);
-//   }
-// }
-
-
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, IsNull } from 'typeorm';
@@ -443,7 +32,7 @@ export class TestResultsService {
 
     const testResults = await this.testResultRepository.find({
       where: { user: { id: userId } },
-      relations: ['test'],
+      relations: ['test', 'user'],
       order: { submittedAt: 'DESC' },
     });
 
@@ -472,16 +61,22 @@ export class TestResultsService {
 
     return testResults;
   }
+  async findAll() {
+    return this.testResultRepository.find();
+  }
+  async findOne(id: string) {
+    const testResult = await this.testResultRepository.findOne({ where: { id }, relations: ['test'] });
+    if (!testResult) {
+      throw new NotFoundException(`Test result with ID ${id} not found`);
+    }
 
-  async submitAnswers(
-    testId: string,
-    userId: string,
-    payload: { answers: Record<string, any>, questionIds: string[] },
-  ): Promise<TestResult> {
-    console.log('=== DEBUG: submitAnswers called ===');
+    return { ...testResult };
+  }
+
+  async createTestExam(testId: string, userId: string): Promise<TestResult> {
+    console.log('=== DEBUG: startTest called ===');
     console.log('testId:', testId);
     console.log('userId:', userId);
-    console.log('payload:', JSON.stringify(payload, null, 2));
 
     const test = await this.testRepository.findOne({ where: { id: testId } });
     if (!test) {
@@ -493,36 +88,88 @@ export class TestResultsService {
       throw new NotFoundException(`User with ID ${userId} not found`);
     }
 
-    // Find the existing test result for this user and test that hasn't been submitted yet
-    const existingTestResult = await this.testResultRepository.findOne({
-      where: {
-        test: { id: testId },
-        user: { id: userId },
-        submittedAt: IsNull(),
-      },
+    const now = new Date(); 
+    const testDuration = test.duration; 
+    const testEndedAt = new Date(now.getTime() + testDuration * 60 * 1000); // Convert minutes to milliseconds
+
+    console.log('testEndedAt:', testEndedAt);
+    const questions = await this.assignRandomQuestions(test.subject, test.numOfQuestion);
+    const questionIds = questions.map(q => q.id);
+    console.log('questionIds:', questionIds);
+    // Create a new test result with submittedAt: null
+    const testResult = this.testResultRepository.create({
+      test,
+      user,
+      answers: {},
+      score: 0,
+      totalScore: 0,
+      percentageScore: 0,
+      questionResults: [],
+      submittedAt: null,
+      createdAt: now,
+      endedAt: testEndedAt,
+      duration: 0,
+      questionIds: questionIds,
     });
-    if (!existingTestResult) {
-      throw new NotFoundException('No started test found for this user and test.');
+
+    return await this.testResultRepository.save(testResult);
+  }
+
+  async submitAnswers(
+    testResultId: string,
+    userId: string,
+    payload: { answers: Record<string, any> },
+  ): Promise<TestResult> {
+    console.log('=== DEBUG: submitAnswers called ===');
+    console.log('testResultId:', testResultId);
+    console.log('payload:', JSON.stringify(payload, null, 2));
+
+    const testResult = await this.testResultRepository.findOne({ where: { id: testResultId, user: { id: userId } }, relations: ['test', 'user'] , });
+    if (!testResult) {
+      throw new NotFoundException(`Test result with ID ${testResultId} not found`);
     }
 
-    const questions = await this.questionRepository.findBy({ id: In(payload.questionIds) });
-    if (questions.length !== payload.questionIds.length) {
+    console.log('testResult:', testResult); 
+    // Find the existing test result for this user and test that hasn't been submitted yet
+    // const existingTestResult = await this.testResultRepository.findOne({
+    //   where: {
+    //     test: { id: testResult.test.id },
+    //     user: { id: userId },
+    //     submittedAt: IsNull(),
+    //   },
+    // });
+    // if (!existingTestResult) {
+    //   throw new NotFoundException('No started test found for this user and test.');
+    // }
+
+    // console.log('existingTestResult:', existingTestResult);
+    // Get questions using the stored question IDs from the test result
+    const questions = await this.questionRepository.findBy({ id: In(testResult.questionIds) });
+    if (questions.length !== testResult.questionIds.length) {
       const foundIds = questions.map(q => q.id);
-      const missingIds = payload.questionIds.filter(id => !foundIds.includes(id));
+      const missingIds = testResult.questionIds.filter(id => !foundIds.includes(id));
       throw new NotFoundException(`Questions not found: ${missingIds.join(', ')}`);
     }
 
     console.log('questions found:', questions.length);
-    console.log('questionIds:', payload.questionIds);
+    console.log('questionIds from test result:', testResult.questionIds);
     console.log('questions data:', questions.map(q => ({ id: q.id, type: q.type, score: q.score })));
 
     let calculatedScore = 0;
     let totalPossibleScore = 0;
     const questionResults: QuestionResult[] = [];
 
+    // Merge new answers with existing saved answers to preserve progress
+    const mergedAnswers = { ...testResult.answers, ...payload.answers };
+    
+    console.log('=== ANSWER MERGING DEBUG ===');
+    console.log('Existing saved answers:', testResult.answers);
+    console.log('New payload answers:', payload.answers);
+    console.log('Merged answers:', mergedAnswers);
+    
     for (const question of questions) {
       totalPossibleScore += question.score;
-      const userAnswer = payload.answers[question.id.toString()];
+      const userAnswer = mergedAnswers[question.id.toString()];
       
       console.log(`Processing question ${question.id}:`, {
         questionType: question.type,
@@ -596,6 +243,7 @@ export class TestResultsService {
             userSelectedLength: userSelectedChoices.length,
             correctChoicesLength: correctChoices.length,
             userSelectedChoices,
+            isCorrect,
             correctChoiceTexts: correctChoices.map(c => c.text)
           });
           
@@ -727,6 +375,7 @@ export class TestResultsService {
             reason = isCorrect 
               ? 'All blanks filled correctly' 
               : 'Some blanks incorrect';
+            
           }
           break;
 
@@ -743,7 +392,6 @@ export class TestResultsService {
         calculatedScore -= question.score * 0.5;
       }
       
-      calculatedScore = Math.max(0, calculatedScore);
 
       questionResults.push({
         questionId: question.id,
@@ -753,6 +401,10 @@ export class TestResultsService {
       });
     }
 
+    // Apply the minimum score limit only at the end, not during calculation
+    console.log('calculatedScore before max:', calculatedScore);
+    calculatedScore = Math.max(0, calculatedScore);
+    
     const percentageScore = totalPossibleScore > 0 
       ? (calculatedScore / totalPossibleScore) * 100 
       : 0;
@@ -764,57 +416,85 @@ export class TestResultsService {
     console.log('questionResults:', questionResults);
 
     // Update the existing test result
-    existingTestResult.answers = payload.answers;
-    existingTestResult.score = calculatedScore;
-    existingTestResult.totalScore = totalPossibleScore;
-    existingTestResult.percentageScore = percentageScore;
-    existingTestResult.questionResults = questionResults;
-    existingTestResult.submittedAt = new Date();
+    testResult.answers = mergedAnswers;
+    testResult.score = calculatedScore;
+    testResult.totalScore = totalPossibleScore;
+    testResult.percentageScore = percentageScore;
+    testResult.questionResults = questionResults;
+    testResult.submittedAt = new Date();
     
     // Calculate duration in seconds
-    const durationMs = existingTestResult.submittedAt.getTime() - existingTestResult.createdAt.getTime();
-    existingTestResult.duration = Math.floor(durationMs / 1000);
+    const durationMs = testResult.submittedAt.getTime() - testResult.createdAt.getTime();
+    testResult.duration = Math.floor(durationMs / 1000);
 
-    return this.testResultRepository.save(existingTestResult);
+    return this.testResultRepository.save(testResult);
   }
 
-  // New method to handle "Take Test" action
-  async startTest(testId: string, userId: string): Promise<TestResult> {
-    console.log('=== DEBUG: startTest called ===');
-    console.log('testId:', testId);
-    console.log('userId:', userId);
 
-    const test = await this.testRepository.findOne({ where: { id: testId } });
-    if (!test) {
-      throw new NotFoundException(`Test with ID ${testId} not found`);
-    }
-
-    const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (!user) {
-      throw new NotFoundException(`User with ID ${userId} not found`);
-    }
-
-    const now = new Date(); 
-    const testDuration = test.duration; // test.duration is in minutes
-    const testEndedAt = new Date(now.getTime() + testDuration * 60 * 1000); // Convert minutes to milliseconds
-
-    console.log('testEndedAt:', testEndedAt);
- 
-    // Create a new test result with submittedAt: null
-    const testResult = this.testResultRepository.create({
-      test,
-      user,
-      answers: {},
-      score: 0,
-      totalScore: 0,
-      percentageScore: 0,
-      questionResults: [],
-      submittedAt: null,
-      createdAt: now,
-      endedAt: testEndedAt,
-      duration: 0,
+  async assignRandomQuestions(subject: string, numOfQuestions: number) {
+    const allQuestions = await this.questionRepository.find({
+      where: { subject: subject as any }
     });
 
-    return await this.testResultRepository.save(testResult);
+    if (allQuestions.length === 0) {
+      throw new BadRequestException(`No questions found for subject: ${subject}`);
+    }
+
+    if (allQuestions.length < numOfQuestions) {
+      throw new BadRequestException(
+        `Not enough questions for subject ${subject}. Available: ${allQuestions.length}, Requested: ${numOfQuestions}`
+      );
+    }
+
+    const shuffledQuestions = this.shuffleArray([...allQuestions]);
+    return shuffledQuestions.slice(0, numOfQuestions);
+  }
+
+  private shuffleArray<T>(array: T[]): T[] {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }
+
+  async getUnsubmittedTestResult(testId: string, userId: string) {
+    const testResult = await this.testResultRepository.findOne({ where: { test: { id: testId }, user: { id: userId }, submittedAt: IsNull() }, relations: ['test', 'user'] });
+    if (!testResult) {
+      throw new NotFoundException(`Test result with ID ${testId} not found`);
+    }
+    return true;
+  }
+
+  async saveAnswers(
+    testResultId: string,
+    userId: string,
+    payload: { answers: Record<string, any> },
+  ): Promise<TestResult> {
+    console.log('=== DEBUG: saveAnswers called ===');
+    console.log('testResultId:', testResultId);
+    console.log('payload:', JSON.stringify(payload, null, 2));
+
+    const testResult = await this.testResultRepository.findOne({ 
+      where: { id: testResultId, user: { id: userId } }, 
+      relations: ['test', 'user'] 
+    });
+    
+    if (!testResult) {
+      throw new NotFoundException(`Test result with ID ${testResultId} not found`);
+    }
+
+    // Check if the test has already been submitted
+    if (testResult.submittedAt) {
+      throw new BadRequestException('Cannot save answers for a test that has already been submitted');
+    }
+
+    console.log('testResult found:', testResult);
+
+    // Update only the answers field without calculating scores or marking as submitted
+    testResult.answers = payload.answers;
+
+    return this.testResultRepository.save(testResult);
   }
 }

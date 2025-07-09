@@ -325,8 +325,7 @@ export class TestsService {
       throw new NotFoundException(`Test with ID ${id} not found`);
     }
 
-    const questions = await this.assignRandomQuestions(id, test.subject, test.numOfQuestion);
-    return { ...test, questions };
+    return { ...test };
   }
 
   async create(createTestDto: CreateTestDto) {
@@ -368,31 +367,4 @@ export class TestsService {
     return { message: `Test with ID ${id} deleted` };
   }
 
-  async assignRandomQuestions(testId: string, subject: string, numOfQuestions: number) {
-    const allQuestions = await this.questionRepository.find({
-      where: { subject: subject as any }
-    });
-
-    if (allQuestions.length === 0) {
-      throw new BadRequestException(`No questions found for subject: ${subject}`);
-    }
-
-    if (allQuestions.length < numOfQuestions) {
-      throw new BadRequestException(
-        `Not enough questions for subject ${subject}. Available: ${allQuestions.length}, Requested: ${numOfQuestions}`
-      );
-    }
-
-    const shuffledQuestions = this.shuffleArray([...allQuestions]);
-    return shuffledQuestions.slice(0, numOfQuestions);
-  }
-
-  private shuffleArray<T>(array: T[]): T[] {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-  }
 }

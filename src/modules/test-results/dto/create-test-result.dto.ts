@@ -10,11 +10,6 @@ export class CreateTestResultDto {
   @IsUUID()
   userId: string;
 
-  @ApiProperty({ description: 'Total possible score (default: 0)', default: 0 })
-  @IsInt()
-  @IsOptional()
-  totalScore: number;
-
   @ApiProperty({ description: 'Ended at (default: null)', default: null })
   @IsOptional()
   endedAt?: Date | null;

@@ -30,6 +30,9 @@ export class TestResult {
   @Column({ type: 'jsonb' })
   questionResults: QuestionResult[];
 
+  @Column({ type: 'jsonb', nullable: true })
+  questionIds: string[]; // Array of question IDs for this test attempt
+
   @Column({ type: 'timestamp with time zone', nullable: true })
   submittedAt: Date | null;
 
@@ -38,9 +41,6 @@ export class TestResult {
   
   @CreateDateColumn({ type: 'timestamp with time zone' })
   createdAt: Date;
-
-  @UpdateDateColumn({ type: 'timestamp with time zone' })
-  updatedAt: Date;
 
   @Column({ type: 'int'})
   duration: number ; // Duration in seconds (e.g., 1230 for 20 minutes 30 seconds)
