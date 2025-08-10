@@ -27,9 +27,45 @@ export class FileStorageService {
     }
   }
 
+  private generateSafeFileName(originalName: string): string {
+    // Extract file extension
+    const ext = path.extname(originalName);
+    const nameWithoutExt = path.basename(originalName, ext);
+    
+    // Sanitize filename: remove/replace dangerous characters
+    let safeName = nameWithoutExt
+      .toLowerCase()
+      .trim()
+      // Replace spaces and special chars with underscores
+      .replace(/[^a-z0-9.-]/g, '_')
+      // Remove multiple consecutive underscores
+      .replace(/_+/g, '_')
+      // Remove leading/trailing underscores
+      .replace(/^_+|_+$/g, '')
+      // Limit length (keeping room for timestamp and extension)
+      .substring(0, 50);
+    
+    // Handle edge cases
+    if (!safeName || safeName.length === 0) {
+      safeName = 'file';
+    }
+    
+    // Windows reserved names check
+    const reservedNames = ['CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'];
+    if (reservedNames.includes(safeName.toUpperCase())) {
+      safeName = `file_${safeName}`;
+    }
+    
+    // Generate unique filename with timestamp
+    const timestamp = Date.now();
+    const randomStr = Math.random().toString(36).substring(2, 8);
+    
+    return `${timestamp}_${randomStr}_${safeName}${ext.toLowerCase()}`;
+  }
+
   async saveFile(file: Express.Multer.File): Promise<File> {
     // Save file to disk
-    const fileName = `${Date.now()}-${file.originalname}`;
+    const fileName = this.generateSafeFileName(file.originalname);
     const filePath = path.join(this.uploadDirectory, fileName);
     await fs.writeFile(filePath, file.buffer);
   

@@ -27,16 +27,16 @@
 // }
 
 
-import { Controller, Post, Get, Body, Param, Request, UseGuards, Put, Query } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { Controller, Post, Get, Body, Param, Request, Put, Query, Delete } from '@nestjs/common';
 import { TestResultsService } from './test-results.service';
 import { TestResult } from './entities/test-result.entity';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
+import { Public } from '../auth/decorators/public.decorator';
+import { LandingPageDataDto, SubjectLeaderboardDto, UserImprovementDto } from './dto/landing-page.dto';
 
 @ApiTags('Test Results')
 @ApiBearerAuth()
 @Controller('test-results')
-@UseGuards(AuthGuard('jwt'))
 export class TestResultsController {
   constructor(private readonly testResultsService: TestResultsService) {}
 
@@ -251,9 +251,103 @@ export class TestResultsController {
     }
   })
   @ApiResponse({ status: 404, description: 'User not found' })
-  async getUserTestHistory(@Request() req): Promise<TestResult[]> {
+  async getUserTestHistory(@Request() req):  Promise<TestResult[]> {
     const userId = req.user.id;
     return this.testResultsService.findByUser(userId);
+  }
+
+  @Get('user/:userId')
+  @ApiOperation({ summary: 'Get test results for a specific user (Admin only)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Test results for the user retrieved successfully',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          test: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              subject: { type: 'string' },
+              duration: { type: 'number' },
+              numOfQuestion: { type: 'number' },
+              questionPerPage: { type: 'number' },
+              createdAt: { type: 'string', format: 'date-time' },
+              updatedAt: { type: 'string', format: 'date-time' }
+            }
+          },
+          user: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' }
+            }
+          },
+          answers: { type: 'object' },
+          score: { type: 'number' },
+          totalScore: { type: 'number' },
+          percentageScore: { type: 'number' },
+          questionResults: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                questionId: { type: 'string' },
+                isCorrect: { type: 'boolean' },
+                score: { type: 'number' },
+                reason: { type: 'string' },
+                questionText: { type: 'string' },
+                questionType: { type: 'string' },
+                choices: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      text: { type: 'string' },
+                      isCorrect: { type: 'boolean' }
+                    }
+                  }
+                },
+                correctAnswer: { type: 'string', nullable: true },
+                matchingPairs: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      question: { type: 'string' },
+                      answer: { type: 'string' }
+                    }
+                  }
+                },
+                blanks: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      answer: { type: 'string' }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          submittedAt: { type: 'string', format: 'date-time' },
+          createdAt: { type: 'string', format: 'date-time' },
+          endedAt: { type: 'string', format: 'date-time' },
+          duration: { type: 'number' },
+          questionIds: {
+            type: 'array',
+            items: { type: 'string' }
+          }
+        }
+      }
+    }
+  })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  async getUserTestResults(@Param('userId') userId: string) {
+    return this.testResultsService.findByUserwithTotalTestTaken(userId);
   }
 
   @Get('leaderboard')
@@ -388,6 +482,7 @@ export class TestResultsController {
     return this.testResultsService.findOne(id);
   }
 
+  
   @Post(':id/submit')
   @ApiOperation({ summary: 'Submit answers for a test' })
   @ApiParam({ name: 'id', description: 'Test ID' })
@@ -518,5 +613,108 @@ export class TestResultsController {
     const userId = req.user.id;
     return this.testResultsService.saveAnswers(testResultId, userId, body);
   }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete a test result from history' })
+  @ApiParam({ name: 'id', description: 'Test result ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Test result deleted successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string' },
+        deletedTestResult: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            testSubject: { type: 'string' },
+            score: { type: 'number' },
+            percentageScore: { type: 'number' },
+            submittedAt: { type: 'string', format: 'date-time' }
+          }
+        }
+      }
+    }
+  })
+  @ApiResponse({ status: 404, description: 'Test result not found or permission denied' })
+  @ApiResponse({ status: 400, description: 'Cannot delete test result' })
+  async deleteTestResult(@Param('id') id: string, @Request() req) {
+    const userId = req.user.id;
+    return this.testResultsService.deleteTestResult(id, userId);
+  }
+
+  // Public endpoints for guest users (landing page data)
+  @Get('public/leaderboard-by-subject')
+  @Public()
+  @ApiOperation({ summary: 'Get top 10 leaderboard for each subject (Public - no auth required)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Leaderboard by subject retrieved successfully',
+    type: [SubjectLeaderboardDto]
+  })
+  async getLeaderboardBySubject(): Promise<SubjectLeaderboardDto[]> {
+    return this.testResultsService.getLeaderboardBySubject(10);
+  }
+
+  @Get('public/active-users')
+  @Public()
+  @ApiOperation({ summary: 'Get count of active users in last 30 days (Public - no auth required)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Active user count retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        activeUserCount: { type: 'number' },
+        days: { type: 'number' }
+      }
+    }
+  })
+  async getActiveUserCount(): Promise<{ activeUserCount: number; days: number }> {
+    const activeUserCount = await this.testResultsService.getActiveUserCount(30);
+    return { activeUserCount, days: 30 };
+  }
+
+  @Get('public/student-improvement')
+  @Public()
+  @ApiOperation({ summary: 'Get student improvement statistics (Public - no auth required)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Student improvement statistics retrieved successfully',
+    type: UserImprovementDto
+  })
+  async getStudentImprovementStats(): Promise<UserImprovementDto> {
+    return this.testResultsService.getStudentImprovementStats();
+  }
+
+  @Get('public/landing-page-data')
+  @Public()
+  @ApiOperation({ summary: 'Get all landing page data (Public - no auth required)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Landing page data retrieved successfully',
+    type: LandingPageDataDto
+  })
+  async getLandingPageData(): Promise<LandingPageDataDto> {
+    return this.testResultsService.getLandingPageData();
+  }
   
+  @Get('public/total-tests-taken')
+  @Public()
+  @ApiOperation({ summary: 'Get total tests taken (Public - no auth required)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Total tests taken retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        totalTests: { type: 'number' }
+      }
+    }
+  })
+  async getTotalTestsTaken(): Promise<{ totalTests: number }> {
+    const totalTests = await this.testResultsService.getTotalTestsTaken();
+    return { totalTests };
+  }
 }

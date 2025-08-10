@@ -1,5 +1,5 @@
 import { Question } from 'src/modules/questions/entities/question.entity';
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, JoinTable, ManyToMany } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, JoinTable, ManyToMany, OneToMany } from 'typeorm';
 
 @Entity({ name: 'tests' })
 export class Test {
@@ -24,7 +24,12 @@ export class Test {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  // @ManyToMany(() => Question)
-  // @JoinTable({ name: 'test_questions' }) // Custom table name
-  // questions: Question[]; // Relationship to questions
+  @Column({ default: true })
+  isActive: boolean;
+
+  @Column({ nullable: true, type: 'timestamp' })
+  deletedAt: Date;
+
+  @OneToMany(() => Question, (question) => question.test)
+  questions: Question[];
 } 

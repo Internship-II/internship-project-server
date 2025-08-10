@@ -305,6 +305,7 @@ import { Test } from './entities/test.entity';
 import { CreateTestDto } from './dto/create-test.dto';
 import { UpdateTestDto } from './dto/update-test.dto';
 import { Question } from '../questions/entities/question.entity';
+import { TestResult } from '../test-results/entities/test-result.entity';
 
 @Injectable()
 export class TestsService {
@@ -313,14 +314,17 @@ export class TestsService {
     private testsRepository: Repository<Test>,
     @InjectRepository(Question)
     private questionRepository: Repository<Question>,
+    @InjectRepository(TestResult)
+    private testResultsRepository: Repository<TestResult>,
   ) {}
 
   async findAll() {
-    return this.testsRepository.find();
+    return this.testsRepository.find({ where: { isActive: true } });
   }
 
-  async findOne(id: string) {
-    const test = await this.testsRepository.findOne({ where: { id } });
+  async findOne(id: string, includeInactive: boolean = false) {
+    const whereCondition = includeInactive ? { id } : { id, isActive: true };
+    const test = await this.testsRepository.findOne({ where: whereCondition });
     if (!test) {
       throw new NotFoundException(`Test with ID ${id} not found`);
     }
@@ -359,12 +363,75 @@ export class TestsService {
   }
 
   async delete(id: string) {
+    const test = await this.testsRepository.findOne({ where: { id, isActive: true } });
+    if (!test) {
+      throw new NotFoundException(`Test with ID ${id} not found`);
+    }
+
+    // Check if test has any test results
+    const testResultsCount = await this.testResultsRepository.count({
+      where: { test: { id } }
+    });
+
+    if (testResultsCount > 0) {
+      // Soft delete - mark as inactive instead of hard delete
+      test.isActive = false;
+      test.deletedAt = new Date();
+      await this.testsRepository.save(test);
+      return { 
+        message: `Test "${test.subject}" deactivated successfully. It has ${testResultsCount} test results that are preserved.`,
+        deactivated: true,
+        testResultsCount
+      };
+    } else {
+      // Hard delete if no test results
+      await this.testsRepository.remove(test);
+      return { message: `Test "${test.subject}" deleted successfully` };
+    }
+  }
+
+  async hardDelete(id: string) {
     const test = await this.testsRepository.findOne({ where: { id } });
     if (!test) {
       throw new NotFoundException(`Test with ID ${id} not found`);
     }
+
+    // Check if test has any test results before hard deletion
+    const testResultsCount = await this.testResultsRepository.count({
+      where: { test: { id } }
+    });
+
+    if (testResultsCount > 0) {
+      throw new BadRequestException(`Cannot hard delete test. Test has ${testResultsCount} test results. Use regular delete for soft delete.`);
+    }
+
     await this.testsRepository.remove(test);
-    return { message: `Test with ID ${id} deleted` };
+    return { message: `Test "${test.subject}" permanently deleted` };
+  }
+
+  async restore(id: string) {
+    const test = await this.testsRepository.findOne({ where: { id, isActive: false } });
+    if (!test) {
+      throw new NotFoundException(`Deactivated test with ID ${id} not found`);
+    }
+
+    test.isActive = true;
+    test.deletedAt = null as any;
+    await this.testsRepository.save(test);
+    return { message: `Test "${test.subject}" restored successfully` };
+  }
+
+  async findAllIncludingInactive() {
+    return this.testsRepository.find();
+  }
+
+  async findOneIncludingInactive(id: string) {
+    const test = await this.testsRepository.findOne({ where: { id } });
+    if (!test) {
+      throw new NotFoundException(`Test with ID ${id} not found`);
+    }
+
+    return { ...test };
   }
 
 }

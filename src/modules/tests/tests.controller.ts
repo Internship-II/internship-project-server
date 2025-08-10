@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards, Logger } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards, Logger, Query } from '@nestjs/common';
 import { TestsService } from './tests.service';
 import { CreateTestDto } from './dto/create-test.dto';
 import { UpdateTestDto } from './dto/update-test.dto';
@@ -101,8 +101,18 @@ export class TestsController {
     }
   })
   @ApiResponse({ status: 404, description: 'Test not found' })
-  async findOne(@Param('id') id: string) {
-    return this.testsService.findOne(id);
+  async findOne(@Param('id') id: string, @Query('includeInactive') includeInactive?: string) {
+    try {
+      this.logger.debug('Received request for test, ID:', id, 'includeInactive:', includeInactive);
+      const includeInactiveBool = includeInactive === 'true';
+      const result = await this.testsService.findOne(id, includeInactiveBool);
+      this.logger.debug('Test retrieved successfully:', result);
+      return result;
+    } catch (error) {
+      this.logger.error('Error retrieving test:', error);
+      this.logger.error('Error stack:', error.stack);
+      throw error;
+    }
   }
 
   @Post()
@@ -255,18 +265,88 @@ export class TestsController {
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete a test' })
+  @ApiOperation({ summary: 'Delete a test (soft delete if has test results)' })
   @ApiParam({ name: 'id', description: 'Test ID' })
-  @ApiResponse({ status: 200, description: 'Test deleted successfully' })
+  @ApiResponse({ status: 200, description: 'Test deleted/deactivated successfully' })
   @ApiResponse({ status: 404, description: 'Test not found' })
   async delete(@Param('id') id: string) {
     try {
       this.logger.debug('Received delete test request for ID:', id);
       const result = await this.testsService.delete(id);
-      this.logger.debug('Test deleted successfully:', result);
+      this.logger.debug('Test deleted/deactivated successfully:', result);
       return result;
     } catch (error) {
       this.logger.error('Error deleting test:', error);
+      this.logger.error('Error stack:', error.stack);
+      throw error;
+    }
+  }
+
+  @Delete(':id/hard')
+  @ApiOperation({ summary: 'Permanently delete a test (only if no test results)' })
+  @ApiParam({ name: 'id', description: 'Test ID' })
+  @ApiResponse({ status: 200, description: 'Test permanently deleted' })
+  @ApiResponse({ status: 404, description: 'Test not found' })
+  async hardDelete(@Param('id') id: string) {
+    try {
+      this.logger.debug('Received hard delete test request for ID:', id);
+      const result = await this.testsService.hardDelete(id);
+      this.logger.debug('Test permanently deleted:', result);
+      return result;
+    } catch (error) {
+      this.logger.error('Error hard deleting test:', error);
+      this.logger.error('Error stack:', error.stack);
+      throw error;
+    }
+  }
+
+  @Put(':id/restore')
+  @ApiOperation({ summary: 'Restore a deactivated test' })
+  @ApiParam({ name: 'id', description: 'Test ID' })
+  @ApiResponse({ status: 200, description: 'Test restored successfully' })
+  @ApiResponse({ status: 404, description: 'Test not found' })
+  async restore(@Param('id') id: string) {
+    try {
+      this.logger.debug('Received restore test request for ID:', id);
+      const result = await this.testsService.restore(id);
+      this.logger.debug('Test restored successfully:', result);
+      return result;
+    } catch (error) {
+      this.logger.error('Error restoring test:', error);
+      this.logger.error('Error stack:', error.stack);
+      throw error;
+    }
+  }
+
+  @Get('all/including-inactive')
+  @ApiOperation({ summary: 'Get all tests including inactive ones' })
+  @ApiResponse({ status: 200, description: 'All tests retrieved successfully' })
+  async findAllIncludingInactive() {
+    try {
+      this.logger.debug('Received request for all tests including inactive');
+      const result = await this.testsService.findAllIncludingInactive();
+      this.logger.debug('All tests retrieved successfully:', result.length);
+      return result;
+    } catch (error) {
+      this.logger.error('Error retrieving all tests:', error);
+      this.logger.error('Error stack:', error.stack);
+      throw error;
+    }
+  }
+
+  @Get(':id/including-inactive')
+  @ApiOperation({ summary: 'Get a test by ID including inactive ones' })
+  @ApiParam({ name: 'id', description: 'Test ID' })
+  @ApiResponse({ status: 200, description: 'Test retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Test not found' })
+  async findOneIncludingInactive(@Param('id') id: string) {
+    try {
+      this.logger.debug('Received request for test including inactive, ID:', id);
+      const result = await this.testsService.findOneIncludingInactive(id);
+      this.logger.debug('Test retrieved successfully:', result);
+      return result;
+    } catch (error) {
+      this.logger.error('Error retrieving test:', error);
       this.logger.error('Error stack:', error.stack);
       throw error;
     }

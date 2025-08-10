@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, UseInterceptors, UploadedFile, UploadedFiles, UseGuards, Logger } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, UseInterceptors, UploadedFile, UploadedFiles, UseGuards, Logger, Query } from '@nestjs/common';
 import { QuestionsService } from './questions.service';
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { UpdateQuestionDto } from './dto/update-question.dto';
@@ -72,8 +72,163 @@ export class QuestionsController {
     }
   })
   @ApiResponse({ status: 404, description: 'Question not found' })
-  async findOne(@Param('id') id: string) {
-    return this.questionsService.findOne(id);
+  async findOne(@Param('id') id: string, @Query('includeInactive') includeInactive?: string) {
+    try {
+      this.logger.debug('Received request for question, ID:', id, 'includeInactive:', includeInactive);
+      const includeInactiveBool = includeInactive === 'true';
+      const result = await this.questionsService.findOne(id, includeInactiveBool);
+      this.logger.debug('Question retrieved successfully:', result);
+      return result;
+    } catch (error) {
+      this.logger.error('Error retrieving question:', error);
+      this.logger.error('Error stack:', error.stack);
+      throw error;
+    }
+  }
+
+  @Get(':id/shuffled')
+  @ApiOperation({ summary: 'Get a question by ID with shuffled answers' })
+  @ApiParam({ name: 'id', description: 'Question ID' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Question details with shuffled answers',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        subject: { type: 'string', enum: ['Math', 'English', 'Logic IQ'] },
+        type: { type: 'string', enum: ['MCQ', 'True or False', 'Yes or No', 'Matching', 'Fill in Blank'] },
+        questionText: { type: 'string' },
+        questionImage: { type: 'string', nullable: true },
+        correctAnswer: { type: 'string' },
+        score: { type: 'number' },
+        choices: { type: 'array', items: { type: 'object' } },
+        matchingPairs: { type: 'array', items: { type: 'object' } },
+        blanks: { type: 'array', items: { type: 'object' } },
+        createdAt: { type: 'string', format: 'date-time' },
+        updatedAt: { type: 'string', format: 'date-time' }
+      }
+    }
+  })
+  @ApiResponse({ status: 404, description: 'Question not found' })
+  async findOneShuffled(@Param('id') id: string) {
+    return this.questionsService.getShuffledQuestion(id);
+  }
+
+  @Post('shuffled')
+  @ApiOperation({ summary: 'Get multiple questions with shuffled answers' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Questions with shuffled answers',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          subject: { type: 'string', enum: ['Math', 'English', 'Logic IQ'] },
+          type: { type: 'string', enum: ['MCQ', 'True or False', 'Yes or No', 'Matching', 'Fill in Blank'] },
+          questionText: { type: 'string' },
+          questionImage: { type: 'string', nullable: true },
+          correctAnswer: { type: 'string' },
+          score: { type: 'number' },
+          choices: { type: 'array', items: { type: 'object' } },
+          matchingPairs: { type: 'array', items: { type: 'object' } },
+          blanks: { type: 'array', items: { type: 'object' } },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' }
+        }
+      }
+    }
+  })
+  async getShuffledQuestions(@Body() body: { questionIds: string[] }) {
+    return this.questionsService.getShuffledQuestions(body.questionIds);
+  }
+
+  @Delete(':id/hard')
+  @ApiOperation({ summary: 'Permanently delete a question (only if no test results reference it)' })
+  @ApiParam({ name: 'id', description: 'Question ID' })
+  @ApiResponse({ status: 200, description: 'Question permanently deleted' })
+  @ApiResponse({ status: 404, description: 'Question not found' })
+  async hardDelete(@Param('id') id: string) {
+    try {
+      this.logger.debug('Received hard delete question request for ID:', id);
+      const result = await this.questionsService.hardDelete(id);
+      this.logger.debug('Question permanently deleted:', result);
+      return result;
+    } catch (error) {
+      this.logger.error('Error hard deleting question:', error);
+      this.logger.error('Error stack:', error.stack);
+      throw error;
+    }
+  }
+
+  @Put(':id/restore')
+  @ApiOperation({ summary: 'Restore a deactivated question' })
+  @ApiParam({ name: 'id', description: 'Question ID' })
+  @ApiResponse({ status: 200, description: 'Question restored successfully' })
+  @ApiResponse({ status: 404, description: 'Question not found' })
+  async restore(@Param('id') id: string) {
+    try {
+      this.logger.debug('Received restore question request for ID:', id);
+      const result = await this.questionsService.restore(id);
+      this.logger.debug('Question restored successfully:', result);
+      return result;
+    } catch (error) {
+      this.logger.error('Error restoring question:', error);
+      this.logger.error('Error stack:', error.stack);
+      throw error;
+    }
+  }
+
+  @Get('all/including-inactive')
+  @ApiOperation({ summary: 'Get all questions including inactive ones' })
+  @ApiResponse({ status: 200, description: 'All questions retrieved successfully' })
+  async findAllIncludingInactive() {
+    try {
+      this.logger.debug('Received request for all questions including inactive');
+      const result = await this.questionsService.findAllIncludingInactive();
+      this.logger.debug('All questions retrieved successfully:', result.length);
+      return result;
+    } catch (error) {
+      this.logger.error('Error retrieving all questions:', error);
+      this.logger.error('Error stack:', error.stack);
+      throw error;
+    }
+  }
+
+  @Get(':id/including-inactive')
+  @ApiOperation({ summary: 'Get a question by ID including inactive ones' })
+  @ApiParam({ name: 'id', description: 'Question ID' })
+  @ApiResponse({ status: 200, description: 'Question retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Question not found' })
+  async findOneIncludingInactive(@Param('id') id: string) {
+    try {
+      this.logger.debug('Received request for question including inactive, ID:', id);
+      const result = await this.questionsService.findOne(id, true);
+      this.logger.debug('Question retrieved successfully:', result);
+      return result;
+    } catch (error) {
+      this.logger.error('Error retrieving question:', error);
+      this.logger.error('Error stack:', error.stack);
+      throw error;
+    }
+  }
+
+  @Get(':id/check-exists')
+  @ApiOperation({ summary: 'Check if a question exists and its status' })
+  @ApiParam({ name: 'id', description: 'Question ID' })
+  @ApiResponse({ status: 200, description: 'Question status checked successfully' })
+  async checkQuestionExists(@Param('id') id: string) {
+    try {
+      this.logger.debug('Checking if question exists, ID:', id);
+      const result = await this.questionsService.checkQuestionExists(id);
+      this.logger.debug('Question existence check result:', result);
+      return result;
+    } catch (error) {
+      this.logger.error('Error checking question existence:', error);
+      throw error;
+    }
   }
 
   @Post()

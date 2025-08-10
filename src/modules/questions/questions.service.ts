@@ -5,24 +5,44 @@ import { Question } from './entities/question.entity';
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { UpdateQuestionDto } from './dto/update-question.dto';
 import { FileStorageService } from '../upload/upload.service';
+import { TestResult } from '../test-results/entities/test-result.entity';
 
 @Injectable()
 export class QuestionsService {
   constructor(
     @InjectRepository(Question)
     private questionsRepository: Repository<Question>,
+    @InjectRepository(TestResult)
+    private testResultsRepository: Repository<TestResult>,
     private fileStorageService: FileStorageService,
   ) {}
 
   async findAll() {
-    return this.questionsRepository.find();
+    return this.questionsRepository.find({ where: { isActive: true } });
   }
 
-  async findOne(id: string) {
-    const question = await this.questionsRepository.findOne({ where: { id } });
+  async findOne(id: string, includeInactive: boolean = false) {
+    const whereCondition = includeInactive ? { id } : { id, isActive: true };
+    const question = await this.questionsRepository.findOne({ where: whereCondition });
+    
     if (!question) {
+      // Check if the question exists but is inactive
+      if (!includeInactive) {
+        const inactiveQuestion = await this.questionsRepository.findOne({ where: { id, isActive: false } });
+        if (inactiveQuestion) {
+          throw new NotFoundException(`Question with ID ${id} is inactive. Use includeInactive=true to view it.`);
+        }
+      }
+      
+      // Check if the question exists at all (including hard deleted)
+      const anyQuestion = await this.questionsRepository.findOne({ where: { id } });
+      if (!anyQuestion) {
+        throw new NotFoundException(`Question with ID ${id} not found. It may have been permanently deleted.`);
+      }
+      
       throw new NotFoundException(`Question with ID ${id} not found`);
     }
+    
     return question;
   }
 
@@ -137,7 +157,100 @@ export class QuestionsService {
 
   async delete(id: string) {
     const question = await this.findOne(id);
+    
+    // Always soft delete to preserve data integrity
+    question.isActive = false;
+    question.deletedAt = new Date();
+    await this.questionsRepository.save(question);
+    return { 
+      message: `Question "${question.questionText.substring(0, 50)}..." deactivated successfully.`,
+      deactivated: true
+    };
+  }
+
+  async hardDelete(id: string) {
+    const question = await this.findOne(id, true); // Include inactive
+    
+    // Hard delete - use with caution
     await this.questionsRepository.remove(question);
-    return { message: `Question with ID ${id} deleted` };
+    return { message: `Question "${question.questionText.substring(0, 50)}..." permanently deleted` };
+  }
+
+  async restore(id: string) {
+    const question = await this.questionsRepository.findOne({ where: { id, isActive: false } });
+    if (!question) {
+      throw new NotFoundException(`Deactivated question with ID ${id} not found`);
+    }
+
+    question.isActive = true;
+    question.deletedAt = null as any;
+    await this.questionsRepository.save(question);
+    return { message: `Question "${question.questionText.substring(0, 50)}..." restored successfully` };
+  }
+
+  async findAllIncludingInactive() {
+    return this.questionsRepository.find();
+  }
+
+  async checkQuestionExists(id: string) {
+    const question = await this.questionsRepository.findOne({ where: { id } });
+    if (!question) {
+      return { exists: false, message: 'Question not found in database' };
+    }
+    
+    return { 
+      exists: true, 
+      isActive: question.isActive,
+      deletedAt: question.deletedAt,
+      message: question.isActive ? 'Question is active' : 'Question is inactive'
+    };
+  }
+
+  private shuffleArray<T>(array: T[]): T[] {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }
+
+  async getShuffledQuestion(id: string) {
+    const question = await this.findOne(id);
+    
+    // Shuffle choices if they exist
+    if (question.choices && question.choices.length > 0) {
+      question.choices = this.shuffleArray(question.choices);
+    }
+    
+    // Shuffle matching pairs if they exist
+    if (question.matchingPairs && question.matchingPairs.length > 0) {
+      question.matchingPairs = this.shuffleArray(question.matchingPairs);
+    }
+    
+    return question;
+  }
+
+  async getShuffledQuestions(ids: string[]) {
+    const questions = await this.questionsRepository.find({
+      where: { 
+        id: { $in: ids } as any,
+        isActive: true 
+      }
+    });
+    
+    return questions.map(question => {
+      // Shuffle choices if they exist
+      if (question.choices && question.choices.length > 0) {
+        question.choices = this.shuffleArray(question.choices);
+      }
+      
+      // Shuffle matching pairs if they exist
+      if (question.matchingPairs && question.matchingPairs.length > 0) {
+        question.matchingPairs = this.shuffleArray(question.matchingPairs);
+      }
+      
+      return question;
+    });
   }
 }

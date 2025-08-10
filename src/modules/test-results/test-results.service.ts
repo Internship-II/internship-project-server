@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In, IsNull } from 'typeorm';
+import { Repository, In, IsNull, Not } from 'typeorm';
 import { TestResult } from './entities/test-result.entity';
 import { Test } from '../tests/entities/test.entity';
 import { User } from '../users/entities/user.entity';    
@@ -21,6 +21,60 @@ export class TestResultsService {
     private questionRepository: Repository<Question>,
   ) {}
 
+  async findByUserwithTotalTestTaken(userId: string) {
+    console.log('=== DEBUG: findByUser called ===');
+    console.log('userId:', userId);
+
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
+    const testResults = await this.testResultRepository.find({
+      where: {         user: { id: userId }    },
+      relations: ['test', 'user'],
+      order: { submittedAt: 'DESC' },
+    });
+
+    const totalTestsTaken = await this.testResultRepository.count({
+      where: {
+        user: { id: userId },
+        submittedAt: Not(IsNull())
+      }
+    })
+
+    console.log('testResults found:', testResults.length);
+
+    // Fetch question details for each test result
+    for (const result of testResults) {
+      const questionIds = result.questionResults.map(qr => qr.questionId);
+      const questions = await this.questionRepository.findBy({ 
+        id: In(questionIds),
+        isActive: true 
+      });
+      console.log(`Questions for test result ${result.id}:`, questions.map(q => ({ id: q.id, questionText: q.questionText })));
+
+      // Attach question details to questionResults
+      result.questionResults = result.questionResults.map(qr => {
+        const question = questions.find(q => q.id === qr.questionId);
+        return {
+          ...qr,
+          questionText: question ? question.questionText : 'Question not found',
+          questionType: question ? question.type : 'Unknown',
+          choices: question ? question.choices : [],
+          correctAnswer: question ? question.correctAnswer : null,
+          matchingPairs: question ? question.matchingPairs : [],
+          blanks: question ? question.blanks : [],
+        };
+      });
+    }
+
+    return {
+      testResults,
+      totalTestsTaken,
+    };
+  }
+
   async findByUser(userId: string): Promise<TestResult[]> {
     console.log('=== DEBUG: findByUser called ===');
     console.log('userId:', userId);
@@ -34,14 +88,17 @@ export class TestResultsService {
       where: { user: { id: userId } },
       relations: ['test', 'user'],
       order: { submittedAt: 'DESC' },
-    });
+    }); 
 
     console.log('testResults found:', testResults.length);
 
     // Fetch question details for each test result
     for (const result of testResults) {
       const questionIds = result.questionResults.map(qr => qr.questionId);
-      const questions = await this.questionRepository.findBy({ id: In(questionIds) });
+      const questions = await this.questionRepository.findBy({ 
+        id: In(questionIds),
+        isActive: true 
+      });
       console.log(`Questions for test result ${result.id}:`, questions.map(q => ({ id: q.id, questionText: q.questionText })));
 
       // Attach question details to questionResults
@@ -66,11 +123,59 @@ export class TestResultsService {
   }
   async findOne(id: string) {
     const testResult = await this.testResultRepository.findOne({ where: { id }, relations: ['test'] });
+    
     if (!testResult) {
       throw new NotFoundException(`Test result with ID ${id} not found`);
     }
 
     return { ...testResult };
+  }
+  
+  async findUserTotalTestsTaken(id: string){
+    const totalTestsTaken = await this.testResultRepository.count({
+      where: {
+        id,
+        submittedAt: Not(IsNull())
+      }
+    })
+    if(!totalTestsTaken){
+      throw new NotFoundException(`Total Test Taken with ID ${id} not found`);
+    }
+    return totalTestsTaken;
+  }
+
+  async deleteTestResult(id: string, userId: string) {
+    console.log('=== DEBUG: deleteTestResult called ===');
+    console.log('testResultId:', id);
+    console.log('userId:', userId);
+
+    const testResult = await this.testResultRepository.findOne({ 
+      where: { id, user: { id: userId } }, 
+      relations: ['test', 'user'] 
+    });
+
+    if (!testResult) {
+      throw new NotFoundException(`Test result with ID ${id} not found or you don't have permission to delete it`);
+    }
+
+    // Check if the test result belongs to the requesting user
+    if (testResult.user.id !== userId) {
+      throw new BadRequestException('You can only delete your own test results');
+    }
+
+    await this.testResultRepository.remove(testResult);
+    
+    console.log('Test result deleted successfully');
+    return { 
+      message: `Test result for ${testResult.test.subject} test deleted successfully`,
+      deletedTestResult: {
+        id: testResult.id,
+        testSubject: testResult.test.subject,
+        score: testResult.score,
+        percentageScore: testResult.percentageScore,
+        submittedAt: testResult.submittedAt
+      }
+    };
   }
 
   async createTestExam(testId: string, userId: string): Promise<TestResult> {
@@ -115,6 +220,90 @@ export class TestResultsService {
     return await this.testResultRepository.save(testResult);
   }
 
+  // Utility function to shuffle an array (matches client-side logic)
+  private shuffleArray<T>(array: T[]): T[] {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }
+
+  // Function to shuffle question choices (matches client-side logic exactly)
+  private shuffleQuestionChoices(question: any): any {
+    const shuffledQuestion = { ...question };
+
+    // Shuffle choices for MCQ, True/False, Yes/No questions
+    if (question.choices && question.choices.length > 0) {
+      shuffledQuestion.choices = this.shuffleArray(question.choices);
+    }
+
+    // Shuffle matching pairs (shuffle the answer side while keeping question side fixed)
+    if (question.matchingPairs && question.matchingPairs.length > 0) {
+      const questions = question.matchingPairs.map(pair => pair.question);
+      const answers = this.shuffleArray(question.matchingPairs.map(pair => pair.answer));
+      
+      shuffledQuestion.matchingPairs = questions.map((question, index) => ({
+        question,
+        answer: answers[index]
+      }));
+    }
+
+    // For fill-in-blank, just shuffle the blanks array order
+    if (question.blanks && question.blanks.length > 0) {
+      shuffledQuestion.blanks = this.shuffleArray([...question.blanks]);
+    }
+
+    return shuffledQuestion;
+  }
+
+  // Get test questions with shuffled answers
+  async getTestQuestions(testResultId: string, userId: string) {
+    console.log('=== DEBUG: getTestQuestions called ===');
+    console.log('testResultId:', testResultId);
+    console.log('userId:', userId);
+
+    const testResult = await this.testResultRepository.findOne({
+      where: { id: testResultId, user: { id: userId } },
+      relations: ['test', 'user']
+    });
+
+    if (!testResult) {
+      throw new NotFoundException(`Test result with ID ${testResultId} not found`);
+    }
+
+    if (!testResult.questionIds || testResult.questionIds.length === 0) {
+      throw new BadRequestException('No questions assigned to this test');
+    }
+
+    console.log('questionIds:', testResult.questionIds);
+
+    // Get questions
+    const questions = await this.questionRepository.findBy({ 
+      id: In(testResult.questionIds),
+      isActive: true 
+    });
+
+    console.log('Found questions:', questions.length);
+
+    // Shuffle answer choices for each question
+    const shuffledQuestions = questions.map(question => {
+      console.log(`Shuffling question ${question.id}:`);
+      console.log('Original choices:', question.choices);
+      
+      const shuffledQuestion = this.shuffleQuestionChoices(question);
+      
+      console.log('Shuffled choices:', shuffledQuestion.choices);
+      console.log('Choices changed:', JSON.stringify(question.choices) !== JSON.stringify(shuffledQuestion.choices));
+      
+      return shuffledQuestion;
+    });
+
+    console.log('Returning shuffled questions:', shuffledQuestions.length);
+    return shuffledQuestions;
+  }
+
   async submitAnswers(
     testResultId: string,
     userId: string,
@@ -144,7 +333,10 @@ export class TestResultsService {
 
     // console.log('existingTestResult:', existingTestResult);
     // Get questions using the stored question IDs from the test result
-    const questions = await this.questionRepository.findBy({ id: In(testResult.questionIds) });
+    const questions = await this.questionRepository.findBy({ 
+      id: In(testResult.questionIds),
+      isActive: true 
+    });
     if (questions.length !== testResult.questionIds.length) {
       const foundIds = questions.map(q => q.id);
       const missingIds = testResult.questionIds.filter(id => !foundIds.includes(id));
@@ -401,12 +593,8 @@ export class TestResultsService {
       });
     }
 
-    // Apply the minimum score limit only at the end, not during calculation
-    console.log('calculatedScore before max:', calculatedScore);
-    calculatedScore = Math.max(0, calculatedScore);
-    
     const percentageScore = totalPossibleScore > 0 
-      ? (calculatedScore / totalPossibleScore) * 100 
+      ? parseFloat(((calculatedScore / totalPossibleScore) * 100).toFixed(2))
       : 0;
 
     console.log('=== FINAL RESULTS ===');
@@ -437,7 +625,10 @@ export class TestResultsService {
 
   async assignRandomQuestions(subject: string, numOfQuestions: number) {
     const allQuestions = await this.questionRepository.find({
-      where: { subject: subject as any }
+      where: { 
+        subject: subject as any,
+        isActive: true 
+      }
     });
 
     if (allQuestions.length === 0) {
@@ -451,16 +642,10 @@ export class TestResultsService {
     }
 
     const shuffledQuestions = this.shuffleArray([...allQuestions]);
-    return shuffledQuestions.slice(0, numOfQuestions);
-  }
-
-  private shuffleArray<T>(array: T[]): T[] {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
+    const selectedQuestions = shuffledQuestions.slice(0, numOfQuestions);
+    
+    // Apply answer shuffling to each selected question
+    return selectedQuestions.map(question => this.shuffleQuestionChoices(question));
   }
 
   async getUnsubmittedTestResult(testId: string, userId: string) {
@@ -576,7 +761,9 @@ export class TestResultsService {
       duration: result.duration,
       durationFormatted: this.formatDuration(result.duration),
       submittedAt: result.submittedAt,
-      questionResults: result.questionResults
+      questionResults: result.questionResults,
+      numOfQuestion: result.test.numOfQuestion,
+      testDuration: result.test.duration
     }));
 
     return leaderboard;
@@ -593,5 +780,203 @@ export class TestResultsService {
     } else {
       return `${remainingSeconds}s`;
     }
+  }
+
+  async getLeaderboardBySubject(limit: number = 10): Promise<any[]> {
+    console.log('=== DEBUG: getLeaderboardBySubject called ===');
+    
+    // Get all unique subjects from submitted tests
+    const subjectsQuery = await this.testResultRepository
+      .createQueryBuilder('testResult')
+      .leftJoinAndSelect('testResult.test', 'test')
+      .select('DISTINCT test.subject', 'subject')
+      .where('testResult.submittedAt IS NOT NULL')
+      .getRawMany();
+
+    const subjects = subjectsQuery.map(row => row.subject);
+    console.log('Found subjects:', subjects);
+
+    const leaderboardBySubject: any[] = [];
+
+    for (const subject of subjects) {
+      const subjectLeaderboard = await this.testResultRepository
+        .createQueryBuilder('testResult')
+        .leftJoinAndSelect('testResult.user', 'user')
+        .leftJoinAndSelect('testResult.test', 'test')
+        .where('testResult.submittedAt IS NOT NULL')
+        .andWhere('test.subject = :subject', { subject })
+        .orderBy('testResult.percentageScore', 'DESC')
+        .addOrderBy('testResult.duration', 'ASC')
+        .addOrderBy('testResult.submittedAt', 'ASC')
+        .limit(limit)
+        .getMany();
+
+      const formattedLeaderboard = subjectLeaderboard.map((result, index) => ({
+        rank: index + 1,
+        userId: result.user.id,
+        username: result.user.name,
+        email: result.user.email,
+        testId: result.test.id,
+        testSubject: result.test.subject,
+        score: result.score,
+        totalScore: result.totalScore,
+        percentageScore: result.percentageScore,
+        duration: result.duration,
+        durationFormatted: this.formatDuration(result.duration),
+        submittedAt: result.submittedAt,
+      }));
+
+      leaderboardBySubject.push({
+        subject,
+        leaderboard: formattedLeaderboard
+      });
+    }
+
+    return leaderboardBySubject;
+  }
+
+  async getActiveUserCount(days: number = 30): Promise<number> {
+    console.log('=== DEBUG: getActiveUserCount called ===');
+    
+    const dateThreshold = new Date();
+    dateThreshold.setDate(dateThreshold.getDate() - days);
+
+    const activeUsers = await this.testResultRepository
+      .createQueryBuilder('testResult')
+      .select('DISTINCT testResult.user.id', 'userId')
+      .where('testResult.submittedAt IS NOT NULL')
+      .andWhere('testResult.submittedAt >= :dateThreshold', { dateThreshold })
+      .getRawMany();
+
+    console.log(`Found ${activeUsers.length} active users in last ${days} days`);
+    return activeUsers.length;
+  }
+
+  async getStudentImprovementStats(): Promise<any> {
+    console.log('=== DEBUG: getStudentImprovementStats called ===');
+
+    // Get first and latest test scores for each user per subject
+    const userImprovements = await this.testResultRepository
+      .createQueryBuilder('testResult')
+      .leftJoinAndSelect('testResult.user', 'user')
+      .leftJoinAndSelect('testResult.test', 'test')
+      .where('testResult.submittedAt IS NOT NULL')
+      .orderBy('user.id')
+      .addOrderBy('test.subject')
+      .addOrderBy('testResult.submittedAt')
+      .getMany();
+
+    // Group by user and subject to find first and last attempts
+    const userSubjectMap = new Map();
+    
+    userImprovements.forEach(result => {
+      const key = `${result.user.id}-${result.test.subject}`;
+      
+      if (!userSubjectMap.has(key)) {
+        userSubjectMap.set(key, {
+          userId: result.user.id,
+          userName: result.user.name,
+          subject: result.test.subject,
+          firstAttempt: result,
+          lastAttempt: result,
+          attemptCount: 1
+        });
+      } else {
+        const existing = userSubjectMap.get(key);
+        existing.lastAttempt = result;
+        existing.attemptCount++;
+        userSubjectMap.set(key, existing);
+      }
+    });
+
+    // Calculate improvements for users with multiple attempts
+    const improvements: any[] = [];
+    let usersWithImprovement = 0;
+    let totalImprovement = 0;
+
+    for (const [key, data] of userSubjectMap) {
+      if (data.attemptCount > 1) {
+        const improvement = data.lastAttempt.percentageScore - data.firstAttempt.percentageScore;
+        improvements.push({
+          userId: data.userId,
+          userName: data.userName,
+          subject: data.subject,
+          firstScore: data.firstAttempt.percentageScore,
+          lastScore: data.lastAttempt.percentageScore,
+          improvement: improvement,
+          attemptCount: data.attemptCount
+        });
+        
+        if (improvement > 0) {
+          usersWithImprovement++;
+        }
+        totalImprovement += improvement;
+      }
+    }
+
+    const averageImprovement = improvements.length > 0 
+      ? parseFloat((totalImprovement / improvements.length).toFixed(2))
+      : 0;
+
+    const improvementPercentage = improvements.length > 0 
+      ? parseFloat(((usersWithImprovement / improvements.length) * 100).toFixed(2))
+      : 0;
+
+    console.log(`Improvement stats: ${improvements.length} users with multiple attempts, ${averageImprovement}% average improvement`);
+
+    return {
+      averageImprovement,
+      usersWithImprovement,
+      improvementPercentage,
+      totalUsersAnalyzed: improvements.length
+    };
+  }
+
+  async getTotalUsers(): Promise<number> {
+    const totalUsers = await this.userRepository.count();
+    console.log(`Total users: ${totalUsers}`);
+    return totalUsers;
+  }
+
+  async getTotalTestsTakenBySubject(): Promise<any> {
+    const totalTests = await this.testResultRepository.count({
+      where: { submittedAt: Not(IsNull()) }
+    });
+    console.log(`Total tests taken: ${totalTests}`);
+    return totalTests;
+  }
+
+  async getTotalTestsTaken(): Promise<number> {
+    const totalTests = await this.testResultRepository.count({
+      where: { submittedAt: Not(IsNull()) }
+    });
+    console.log(`Total tests taken: ${totalTests}`);
+    return totalTests;
+  }
+
+  async getLandingPageData(): Promise<any> {
+    console.log('=== DEBUG: getLandingPageData called ===');
+
+    const [
+      leaderboardBySubject,
+      activeUserCount,
+      studentImprovement,
+      totalUsers,
+      totalTestsTaken
+    ] = await Promise.all([
+      this.getLeaderboardBySubject(10),
+      this.getActiveUserCount(30),
+      this.getStudentImprovementStats(),
+      this.getTotalUsers(),
+      this.getTotalTestsTaken()
+    ]);
+
+    return {
+      leaderboardBySubject,
+      activeUserCount,
+      studentImprovement,
+      totalUsers,
+      totalTestsTaken
+    };
   }
 }

@@ -1,10 +1,14 @@
+import { Test } from 'src/modules/tests/entities/test.entity';
 import { QuestionType, SubjectType } from 'src/types/questions';
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne } from 'typeorm';
  
 @Entity({ name: 'questions' })
 export class Question {
   @PrimaryGeneratedColumn("uuid")
   id: string;
+
+  @ManyToOne(() => Test)
+  test: Test;
 
   @Column({
     type: 'enum',
@@ -44,4 +48,10 @@ export class Question {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @Column({ default: true })
+  isActive: boolean;
+
+  @Column({ nullable: true, type: 'timestamp' })
+  deletedAt: Date;
 }

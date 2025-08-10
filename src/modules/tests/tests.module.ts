@@ -4,10 +4,11 @@ import { TestsService } from './tests.service';
 import { TestsController } from './tests.controller';
 import { Test } from './entities/test.entity';
 import { Question } from '../questions/entities/question.entity';
+import { TestResult } from '../test-results/entities/test-result.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Test, Question])
+    TypeOrmModule.forFeature([Test, Question, TestResult])
   ],
   controllers: [TestsController],
   providers: [TestsService],
