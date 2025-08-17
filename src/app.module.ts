@@ -20,20 +20,42 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    // TypeOrmModule.forRootAsync({
+    //   imports: [ConfigModule],
+    //   inject: [ConfigService],
+    //   useFactory: async (configService: ConfigService) => ({
+    //     type: 'postgres',
+    //     host: configService.get('DB_HOST'),
+    //     port: configService.get('DB_PORT'),
+    //     username: configService.get('DB_USERNAME'),
+    //     password: configService.get('DB_PASSWORD'),
+    //     database: configService.get('DB_NAME'),        
+    //     entities: [__dirname + '/**/*.entity{.ts,.js}'],
+    //     synchronize: configService.get('NODE_ENV') !== 'production', // set to false in production
+    //     timezone: '+07:00',
+    //     // Performance optimizations
+    //     extra: {
+    //       connectionLimit: 20,
+    //       acquireTimeout: 60000,
+    //       timeout: 60000,
+    //     },
+    //     poolSize: 20,
+    //     maxQueryExecutionTime: 10000,
+    //     logging: false, // Disable verbose database logging
+    //     cache: {
+    //       duration: 30000, // 30 seconds
+    //     },
+    //   }),
+    // }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => ({
         type: 'postgres',
-        host: configService.get('DB_HOST'),
-        port: configService.get('DB_PORT'),
-        username: configService.get('DB_USERNAME'),
-        password: configService.get('DB_PASSWORD'),
-        database: configService.get('DB_NAME'),        
+        url: configService.get('DATABASE_URL'), // use full Render DB URL
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: configService.get('NODE_ENV') !== 'production', // set to false in production
+        synchronize: configService.get('NODE_ENV') !== 'production',
         timezone: '+07:00',
-        // Performance optimizations
         extra: {
           connectionLimit: 20,
           acquireTimeout: 60000,
@@ -41,10 +63,8 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
         },
         poolSize: 20,
         maxQueryExecutionTime: 10000,
-        logging: false, // Disable verbose database logging
-        cache: {
-          duration: 30000, // 30 seconds
-        },
+        logging: false,
+        cache: { duration: 30000 },
       }),
     }),
     UsersModule,
