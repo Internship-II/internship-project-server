@@ -52,7 +52,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
       inject: [ConfigService],
       useFactory: async (configService: ConfigService) => ({
         type: 'postgres',
-        url: configService.get('DATABASE_URL'), // use full Render DB URL
+        url: configService.get('DATABASE_URL'), // Render DB URL
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
         synchronize: configService.get('NODE_ENV') !== 'production',
         timezone: '+07:00',
@@ -60,6 +60,9 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
           connectionLimit: 20,
           acquireTimeout: 60000,
           timeout: 60000,
+          ssl: {
+            rejectUnauthorized: false, // <--- ADD THIS
+          },
         },
         poolSize: 20,
         maxQueryExecutionTime: 10000,
