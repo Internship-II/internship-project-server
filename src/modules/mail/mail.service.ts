@@ -65,7 +65,7 @@ export class MailService {
           .header h1 { margin: 0; font-size: 24px; }
           .content { padding: 30px 20px; text-align: center; }
           .content p { font-size: 16px; margin: 15px 0; }
-          .verify-button { display: inline-block; padding: 14px 28px; background: rgb(0, 89, 22); color: white !important; text-decoration: none; border-radius: 50px; font-weight: bold; transition: 0.3s; }
+          .verify-button { display: inline-block; padding: 14px 28px; background: rgb(0, 89, 22); color: white !important; text-decoration: none; border-radius: 20px; font-weight: bold; transition: 0.3s; }
           .verify-button:hover { background:rgb(0, 168, 42); }
           .manual-link { word-break: break-all; font-size: 14px; color: #555; margin-top: 10px; display: block; }
           .footer { padding: 20px; text-align: center; font-size: 12px; color: #999; }
