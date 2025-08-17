@@ -1,7 +1,5 @@
 // src/test-results/test-result.entity.ts
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, UpdateDateColumn, CreateDateColumn } from 'typeorm';
-import { Test } from '../../tests/entities/test.entity';
-import { User } from '../../users/entities/user.entity';
 import { QuestionResult } from 'src/types/question-result';
 
 @Entity({ name: 'test_results' })
@@ -9,11 +7,13 @@ export class TestResult {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => Test)
-  test: Test;
+  @ManyToOne('Test', 'testResults')
+  test: any;
 
-  @ManyToOne(() => User, user => user.testResults, { onDelete: 'CASCADE' })
-  user: User;
+  @ManyToOne('User', 'testResults', { 
+    onDelete: 'CASCADE' // Automatically delete test results when user is deleted
+  })
+  user: any;
   
   @Column({ type: 'jsonb' })
   answers: Record<string, any>; // Answers by question ID

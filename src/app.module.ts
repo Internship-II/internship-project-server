@@ -31,8 +31,20 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
         password: configService.get('DB_PASSWORD'),
         database: configService.get('DB_NAME'),        
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: true, // set to false in production
+        synchronize: configService.get('NODE_ENV') !== 'production', // set to false in production
         timezone: '+07:00',
+        // Performance optimizations
+        extra: {
+          connectionLimit: 20,
+          acquireTimeout: 60000,
+          timeout: 60000,
+        },
+        poolSize: 20,
+        maxQueryExecutionTime: 10000,
+        logging: false, // Disable verbose database logging
+        cache: {
+          duration: 30000, // 30 seconds
+        },
       }),
     }),
     UsersModule,

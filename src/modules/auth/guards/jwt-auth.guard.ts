@@ -21,11 +21,8 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     const request = context.switchToHttp().getRequest();
     const path = request.path;
 
-    this.logger.debug(`Checking path: ${path}`);
-
     // Check if the path is in the public paths list
     if (this.publicPaths.includes(path)) {
-      this.logger.debug(`Path ${path} is public`);
       return true;
     }
 
@@ -36,7 +33,6 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     ]);
 
     if (isPublic) {
-      this.logger.debug(`Route is marked as public`);
       return true;
     }
 

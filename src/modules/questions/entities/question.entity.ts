@@ -1,4 +1,3 @@
-import { Test } from 'src/modules/tests/entities/test.entity';
 import { QuestionType, SubjectType } from 'src/types/questions';
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne } from 'typeorm';
  
@@ -7,8 +6,8 @@ export class Question {
   @PrimaryGeneratedColumn("uuid")
   id: string;
 
-  @ManyToOne(() => Test)
-  test: Test;
+  @ManyToOne('Test', 'questions')
+  test: any;
 
   @Column({
     type: 'enum',

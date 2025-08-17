@@ -17,6 +17,15 @@ export class File {
   @Column()
   mimeType: string;
 
+  @Column({ nullable: true })
+  cloudUrl: string;
+
+  @Column({ nullable: true })
+  cloudPublicId: string;
+
+  @Column({ default: 'local' })
+  storageType: 'local' | 'cloud';
+
   @CreateDateColumn()
   createdAt: Date;
 }

@@ -1,4 +1,3 @@
-import { Question } from 'src/modules/questions/entities/question.entity';
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, JoinTable, ManyToMany, OneToMany } from 'typeorm';
 
 @Entity({ name: 'tests' })
@@ -30,6 +29,6 @@ export class Test {
   @Column({ nullable: true, type: 'timestamp' })
   deletedAt: Date;
 
-  @OneToMany(() => Question, (question) => question.test)
-  questions: Question[];
+  @OneToMany('Question', 'test')
+  questions: any[];
 } 

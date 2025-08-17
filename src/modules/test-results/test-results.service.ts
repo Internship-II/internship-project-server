@@ -76,44 +76,19 @@ export class TestResultsService {
   }
 
   async findByUser(userId: string): Promise<TestResult[]> {
-    console.log('=== DEBUG: findByUser called ===');
-    console.log('userId:', userId);
-
-    const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (!user) {
-      throw new NotFoundException(`User with ID ${userId} not found`);
-    }
-
+    // Removed verbose logging
     const testResults = await this.testResultRepository.find({
       where: { user: { id: userId } },
-      relations: ['test', 'user'],
-      order: { submittedAt: 'DESC' },
-    }); 
+      relations: ['test'],
+      order: { createdAt: 'DESC' }
+    });
 
-    console.log('testResults found:', testResults.length);
-
-    // Fetch question details for each test result
+    // Populate questions for each test result
     for (const result of testResults) {
-      const questionIds = result.questionResults.map(qr => qr.questionId);
-      const questions = await this.questionRepository.findBy({ 
-        id: In(questionIds),
-        isActive: true 
-      });
-      console.log(`Questions for test result ${result.id}:`, questions.map(q => ({ id: q.id, questionText: q.questionText })));
-
-      // Attach question details to questionResults
-      result.questionResults = result.questionResults.map(qr => {
-        const question = questions.find(q => q.id === qr.questionId);
-        return {
-          ...qr,
-          questionText: question ? question.questionText : 'Question not found',
-          questionType: question ? question.type : 'Unknown',
-          choices: question ? question.choices : [],
-          correctAnswer: question ? question.correctAnswer : null,
-          matchingPairs: question ? question.matchingPairs : [],
-          blanks: question ? question.blanks : [],
-        };
-      });
+      if (result.questionIds && result.questionIds.length > 0) {
+        const questions = await this.questionRepository.findByIds(result.questionIds);
+        // Removed verbose logging
+      }
     }
 
     return testResults;
@@ -145,9 +120,7 @@ export class TestResultsService {
   }
 
   async deleteTestResult(id: string, userId: string) {
-    console.log('=== DEBUG: deleteTestResult called ===');
-    console.log('testResultId:', id);
-    console.log('userId:', userId);
+    // Removed verbose logging
 
     const testResult = await this.testResultRepository.findOne({ 
       where: { id, user: { id: userId } }, 
@@ -165,7 +138,7 @@ export class TestResultsService {
 
     await this.testResultRepository.remove(testResult);
     
-    console.log('Test result deleted successfully');
+    // Removed verbose logging
     return { 
       message: `Test result for ${testResult.test.subject} test deleted successfully`,
       deletedTestResult: {
@@ -179,9 +152,7 @@ export class TestResultsService {
   }
 
   async createTestExam(testId: string, userId: string): Promise<TestResult> {
-    console.log('=== DEBUG: startTest called ===');
-    console.log('testId:', testId);
-    console.log('userId:', userId);
+    // Removed verbose logging
 
     const test = await this.testRepository.findOne({ where: { id: testId } });
     if (!test) {
@@ -197,10 +168,10 @@ export class TestResultsService {
     const testDuration = test.duration; 
     const testEndedAt = new Date(now.getTime() + testDuration * 60 * 1000); // Convert minutes to milliseconds
 
-    console.log('testEndedAt:', testEndedAt);
+    // Removed verbose logging
     const questions = await this.assignRandomQuestions(test.subject, test.numOfQuestion);
     const questionIds = questions.map(q => q.id);
-    console.log('questionIds:', questionIds);
+    // Removed verbose logging
     // Create a new test result with submittedAt: null
     const testResult = this.testResultRepository.create({
       test,

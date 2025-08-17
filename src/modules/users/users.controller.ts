@@ -64,9 +64,9 @@ export class UsersController {
       const isVerified = await this.usersService.verifyEmail(token); // returns boolean
 
       if (isVerified) {
-        return res.redirect('http://localhost:3000/verify-email/verify-success');
+        return res.redirect(`${process.env.FRONTEND_URL}/verify-email/verify-success`);
       } else {
-        return res.redirect('http://localhost:3000/verify-email/verify-error');
+        return res.redirect(`${process.env.FRONTEND_URL}/verify-email/verify-error`);
       }
     }
 
