@@ -58,17 +58,17 @@ export class UsersController {
   }
 
   @Get('verify-email')
-      async verifyEmail(@Query('token') token: string) {
-      this.logger.debug(`Received verification request with token: ${token}`);
-      try {
-      await this.usersService.verifyEmail(token);
-      this.logger.debug(`Verification successful for token: ${token}`);
-      return { message: "Email successfully verified" };
-      } catch (error) {
-      this.logger.error(`Verification failed for token: ${token}`, error);
-      throw error; // NestJS will automatically return appropriate status code & message
+      async verifyEmail(@Query('token') token: string ,
+      @Res() res: Response, // use Express response
+    ) {
+      const isVerified = await this.usersService.verifyEmail(token); // returns boolean
+
+      if (isVerified) {
+        return res.redirect('http://localhost:3000/verify-email/verify-success');
+      } else {
+        return res.redirect('http://localhost:3000/verify-email/verify-error');
       }
- }
+    }
 
   @Public()
   @Get('debug-token')

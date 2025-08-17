@@ -12,9 +12,9 @@ export class TestResult {
   @ManyToOne(() => Test)
   test: Test;
 
-  @ManyToOne(() => User)
+  @ManyToOne(() => User, user => user.testResults, { onDelete: 'CASCADE' })
   user: User;
-
+  
   @Column({ type: 'jsonb' })
   answers: Record<string, any>; // Answers by question ID
 

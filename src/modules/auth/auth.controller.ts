@@ -38,4 +38,12 @@ export class AuthController {
     return this.authService.login(loginDto);
   }
   
+  @Public()
+  @Post('login-verified')
+  @HttpCode(HttpStatus.OK)
+  async loginVerified(@Body() body: { email: string }) {
+    return this.authService.loginVerifiedUser(body.email);
+  }
+
+
 }

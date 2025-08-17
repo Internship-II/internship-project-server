@@ -318,21 +318,7 @@ export class TestResultsService {
       throw new NotFoundException(`Test result with ID ${testResultId} not found`);
     }
 
-    console.log('testResult:', testResult); 
-    // Find the existing test result for this user and test that hasn't been submitted yet
-    // const existingTestResult = await this.testResultRepository.findOne({
-    //   where: {
-    //     test: { id: testResult.test.id },
-    //     user: { id: userId },
-    //     submittedAt: IsNull(),
-    //   },
-    // });
-    // if (!existingTestResult) {
-    //   throw new NotFoundException('No started test found for this user and test.');
-    // }
-
-    // console.log('existingTestResult:', existingTestResult);
-    // Get questions using the stored question IDs from the test result
+    console.log('testResult:', testResult);  
     const questions = await this.questionRepository.findBy({ 
       id: In(testResult.questionIds),
       isActive: true 
@@ -979,4 +965,414 @@ export class TestResultsService {
       totalTestsTaken
     };
   }
+
+  
+/**
+ * Get leaderboard by subject with advanced filtering and pagination
+ */
+async getLeaderboardBySubjectWithPagination(
+  subject: string,
+  sortBy: 'percentageScore' | 'score' | 'duration' = 'percentageScore',
+  dateFilter: string = 'all',
+  page: number = 1,
+  limit: number = 10
+): Promise<{
+  entries: any[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalCount: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+    limit: number;
+  };
+}> {
+  console.log('=== getLeaderboardBySubject called ===');
+  console.log('Subject:', subject, 'SortBy:', sortBy, 'DateFilter:', dateFilter, 'Page:', page);
+
+  // Build base query with proper joins and filtering
+  let query = this.testResultRepository
+    .createQueryBuilder('testResult')
+    .leftJoinAndSelect('testResult.user', 'user')
+    .leftJoinAndSelect('testResult.test', 'test')
+    .where('testResult.submittedAt IS NOT NULL')
+    .andWhere('test.subject = :subject', { subject });
+
+  // Apply date filtering at database level
+  if (dateFilter !== 'all') {
+    const now = new Date();
+    let filterDate = new Date();
+    
+    switch (dateFilter) {
+      case 'today':
+        filterDate.setHours(0, 0, 0, 0);
+        break;
+      case 'week':
+        filterDate.setDate(now.getDate() - 7);
+        break;
+      case 'month':
+        filterDate.setMonth(now.getMonth() - 1);
+        break;
+      case 'year':
+        filterDate.setFullYear(now.getFullYear() - 1);
+        break;
+    }
+    
+    query = query.andWhere('testResult.submittedAt >= :filterDate', { filterDate });
+  }
+
+  // Apply sorting with proper tiebreakers
+  this.applySorting(query, sortBy);
+
+  // Get total count for pagination (before applying pagination)
+  const totalCount = await query.getCount();
+  
+  // Apply pagination
+  const offset = (page - 1) * limit;
+  query = query.skip(offset).take(limit);
+  
+  // Execute query
+  const results = await query.getMany();
+  
+  console.log(`Found ${results.length} entries out of ${totalCount} total for subject: ${subject}`);
+
+  // Transform results with proper ranking
+  const entries = results.map((result, index) => ({
+    rank: offset + index + 1, // Global rank considering pagination
+    userId: result.user.id,
+    username: result.user.name,
+    email: result.user.email,
+    testId: result.test.id,
+    testSubject: result.test.subject,
+    score: result.score,
+    totalScore: result.totalScore,
+    percentageScore: result.percentageScore,
+    duration: result.duration,
+    durationFormatted: this.formatDuration(result.duration),
+    submittedAt: result.submittedAt,
+    questionResults: result.questionResults,
+    numOfQuestion: result.test.numOfQuestion,
+    testDuration: result.test.duration
+  }));
+
+  const totalPages = Math.ceil(totalCount / limit);
+  
+  return {
+    entries,
+    pagination: {
+      currentPage: page,
+      totalPages,
+      totalCount,
+      hasNext: page < totalPages,
+      hasPrev: page > 1,
+      limit
+    }
+  };
+}
+
+/**
+ * Get all available test subjects from published tests
+ */
+async getAvailableSubjects(): Promise<string[]> {
+  console.log('=== getAvailableSubjects called ===');
+  
+  try {
+    const subjects = await this.testRepository
+      .createQueryBuilder('test')
+      .select('DISTINCT test.subject', 'subject')
+      .where('test.isActive = :isActive', { isActive: true })
+      .orderBy('test.subject', 'ASC')
+      .getRawMany();
+  
+    const subjectList = subjects.map(item => item.subject);
+    console.log('Available subjects:', subjectList);
+  
+    return subjectList;
+  } catch (error) {
+    console.error('Error fetching available subjects:', error);
+    throw new Error('Failed to retrieve available subjects');
+  }
+}
+/**
+ * Get comprehensive user performance statistics
+ */
+async getUserPerformance(
+  userId: string, 
+  subject?: string
+): Promise<{
+  userEntries: any[];
+  userBestPerformance: any | null;
+  userAverageScore: number;
+  userBestRank: number | null;
+  totalTests: number;
+  subjectStats: Record<string, any>;
+}> {
+  console.log('=== getUserPerformance called ===');
+  console.log('UserId:', userId, 'Subject:', subject);
+
+  let query = this.testResultRepository
+    .createQueryBuilder('testResult')
+    .leftJoinAndSelect('testResult.user', 'user')
+    .leftJoinAndSelect('testResult.test', 'test')
+    .where('testResult.userId = :userId', { userId })
+    .andWhere('testResult.submittedAt IS NOT NULL');
+
+  if (subject) {
+    query = query.andWhere('test.subject = :subject', { subject });
+  }
+
+  const userResults = await query.getMany();
+
+  if (userResults.length === 0) {
+    return {
+      userEntries: [],
+      userBestPerformance: null,
+      userAverageScore: 0,
+      userBestRank: null,
+      totalTests: 0,
+      subjectStats: {}
+    };
+  }
+
+  // Find best performance
+  const userBestPerformance = userResults.reduce((best, current) => 
+    current.percentageScore > best.percentageScore ? current : best
+  );
+
+  // Calculate average score
+  const userAverageScore = userResults.reduce((sum, result) => 
+    sum + result.percentageScore, 0) / userResults.length;
+
+  // Get user's best rank (requires separate optimized query)
+  let userBestRank: number | null = null;
+  if (subject && userBestPerformance) {
+    userBestRank = await this.getUserRankInSubject(
+      userId, 
+      subject, 
+      userBestPerformance.percentageScore,
+      userBestPerformance.duration,
+      userBestPerformance.submittedAt || new Date()
+    );
+  }
+
+  // Calculate subject-wise statistics
+  const subjectStats = await this.calculateSubjectStats(userResults);
+
+  // Transform user entries
+  const userEntries = userResults.map(result => ({
+    userId: result.user?.id || userId,
+    username: result.user?.name || 'Unknown',
+    email: result.user?.email || '',
+    testId: result.test.id,
+    testSubject: result.test.subject,
+    score: result.score,
+    totalScore: result.totalScore,
+    percentageScore: result.percentageScore,
+    duration: result.duration,
+    submittedAt: result.submittedAt,
+    numOfQuestion: result.test.numOfQuestion,
+    testDuration: result.test.duration
+  }));
+
+  return {
+    userEntries,
+    userBestPerformance: userBestPerformance ? {
+      userId: userBestPerformance.user?.id || userId,
+      username: userBestPerformance.user?.name || 'Unknown',
+      email: userBestPerformance.user?.email || '',
+      testId: userBestPerformance.test.id,
+      testSubject: userBestPerformance.test.subject,
+      score: userBestPerformance.score,
+      totalScore: userBestPerformance.totalScore,
+      percentageScore: userBestPerformance.percentageScore,
+      duration: userBestPerformance.duration,
+      submittedAt: userBestPerformance.submittedAt,
+      numOfQuestion: userBestPerformance.test.numOfQuestion,
+      testDuration: userBestPerformance.test.duration
+    } : null,
+    userAverageScore,
+    userBestRank,
+    totalTests: userResults.length,
+    subjectStats
+  };
+}
+
+/**
+ * Get user's rank in a specific subject (optimized query)
+ */
+async getUserRankInSubject(
+  userId: string, 
+  subject: string, 
+  userScore: number, 
+  userDuration: number, 
+  userSubmittedAt: Date
+): Promise<number> {
+  const rankQuery = await this.testResultRepository
+    .createQueryBuilder('testResult')
+    .leftJoin('testResult.test', 'test')
+    .select('COUNT(*) + 1', 'rank')
+    .where('test.subject = :subject', { subject })
+    .andWhere('testResult.submittedAt IS NOT NULL')
+    .andWhere(`(
+      testResult.percentageScore > :userScore OR
+      (testResult.percentageScore = :userScore AND testResult.duration < :userDuration) OR
+      (testResult.percentageScore = :userScore AND testResult.duration = :userDuration AND testResult.submittedAt < :userSubmittedAt)
+    )`, {
+      userScore,
+      userDuration,
+      userSubmittedAt
+    })
+    .getRawOne();
+
+  return parseInt(rankQuery.rank);
+}
+
+/**
+ * Calculate subject-wise statistics for a user
+ */
+
+private async calculateSubjectStats(userResults: any[]): Promise<Record<string, any>> {
+  const subjectGroups = userResults.reduce((acc: any, result: any) => {
+    const subject = result.test.subject;
+    if (!acc[subject]) acc[subject] = [];
+    acc[subject].push(result);
+    return acc;
+  }, {} as Record<string, any[]>);
+
+  const subjectStats = {};
+  for (const [subject, results] of Object.entries(subjectGroups) as [string, any[]][]) {
+    const best = results.reduce((best: any, current: any) => 
+      current.percentageScore > best.percentageScore ? current : best
+    );
+    const avg = results.reduce((sum: number, r: any) => sum + r.percentageScore, 0) / results.length;
+    
+    subjectStats[subject] = {
+      totalTests: results.length,
+      bestScore: best.percentageScore,
+      averageScore: Math.round(avg * 100) / 100,
+      bestResult: {
+        testId: best.test.id,
+        score: best.score,
+        totalScore: best.totalScore,
+        percentageScore: best.percentageScore,
+        duration: best.duration,
+        submittedAt: best.submittedAt
+      }
+    };
+  }
+
+  return subjectStats;
+}
+
+/**
+ * Apply sorting logic with proper tiebreakers
+ */
+private applySorting(query: any, sortBy: string): void {
+  switch (sortBy) {
+    case 'percentageScore':
+      query
+        .orderBy('testResult.percentageScore', 'DESC')
+        .addOrderBy('testResult.duration', 'ASC') // Faster duration as tiebreaker
+        .addOrderBy('testResult.submittedAt', 'ASC'); // Earlier submission as final tiebreaker
+      break;
+    case 'score':
+      query
+        .orderBy('testResult.score', 'DESC')
+        .addOrderBy('testResult.percentageScore', 'DESC') // Higher percentage as tiebreaker
+        .addOrderBy('testResult.submittedAt', 'ASC');
+      break;
+    case 'duration':
+      query
+        .orderBy('testResult.duration', 'ASC') // Fastest first
+        .addOrderBy('testResult.percentageScore', 'DESC') // Higher percentage as tiebreaker
+        .addOrderBy('testResult.submittedAt', 'ASC');
+      break;
+    default:
+      query
+        .orderBy('testResult.percentageScore', 'DESC')
+        .addOrderBy('testResult.duration', 'ASC')
+        .addOrderBy('testResult.submittedAt', 'ASC');
+  }
+}
+
+/**
+ * Get top performers across all subjects (for general leaderboard)
+ */
+async getTopPerformersAllSubjects(limit: number = 10): Promise<any[]> {
+  console.log('=== getTopPerformersAllSubjects called ===');
+  
+  const query = this.testResultRepository
+    .createQueryBuilder('testResult')
+    .leftJoinAndSelect('testResult.user', 'user')
+    .leftJoinAndSelect('testResult.test', 'test')
+    .where('testResult.submittedAt IS NOT NULL');
+
+  this.applySorting(query, 'percentageScore');
+  query.limit(limit);
+
+  const results = await query.getMany();
+  
+  return results.map((result, index) => ({
+    rank: index + 1,
+    userId: result.user.id,
+    username: result.user.name,
+    email: result.user.email,
+    testSubject: result.test.subject,
+    percentageScore: result.percentageScore,
+    duration: result.duration,
+    submittedAt: result.submittedAt,
+    score: result.score,
+    totalScore: result.totalScore
+  }));
+}
+
+/**
+ * Get leaderboard statistics for analytics
+ */
+async getLeaderboardStats(): Promise<{
+  totalSubmissions: number;
+  totalUsers: number;
+  subjectStats: any[];
+}> {
+  console.log('=== getLeaderboardStats called ===');
+  
+  const totalSubmissions = await this.testResultRepository
+    .createQueryBuilder('testResult')
+    .where('testResult.submittedAt IS NOT NULL')
+    .getCount();
+
+  const totalUsersResult = await this.testResultRepository
+    .createQueryBuilder('testResult')
+    .where('testResult.submittedAt IS NOT NULL')
+    .select('COUNT(DISTINCT testResult.userId)', 'count')
+    .getRawOne();
+
+  const subjectStats = await this.testResultRepository
+    .createQueryBuilder('testResult')
+    .leftJoin('testResult.test', 'test')
+    .where('testResult.submittedAt IS NOT NULL')
+    .groupBy('test.subject')
+    .select([
+      'test.subject as subject',
+      'COUNT(*) as totalSubmissions',
+      'AVG(testResult.percentageScore) as averageScore',
+      'MAX(testResult.percentageScore) as highestScore',
+      'COUNT(DISTINCT testResult.userId) as uniqueUsers'
+    ])
+    .getRawMany();
+
+  return {
+    totalSubmissions,
+    totalUsers: parseInt(totalUsersResult.count),
+    subjectStats: subjectStats.map(stat => ({
+      subject: stat.subject,
+      totalSubmissions: parseInt(stat.totalSubmissions),
+      averageScore: Math.round(parseFloat(stat.averageScore) * 100) / 100,
+      highestScore: parseFloat(stat.highestScore),
+      uniqueUsers: parseInt(stat.uniqueUsers)
+    }))
+  };
+}
+ 
+
 }

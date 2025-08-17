@@ -1,4 +1,5 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from "typeorm"
+import { TestResult } from "src/modules/test-results/entities/test-result.entity"
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToMany } from "typeorm"
 
 @Entity({ name: 'users' })
 export class User {
@@ -40,4 +41,8 @@ export class User {
 
   @UpdateDateColumn()
   updatedAt: Date
+
+  
+  @OneToMany(() => TestResult, testResult => testResult.user, { cascade: true })
+  testResults: TestResult[];
 }

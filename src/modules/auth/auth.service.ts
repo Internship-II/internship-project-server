@@ -98,4 +98,25 @@ export class AuthService {
     this.logger.debug(`Verified login successful for: ${email}`);
     return user;
   }
+
+  async loginVerifiedUser(email: string) {
+    const user = await this.usersService.findByEmail(email);
+    
+    if (!user || !user.isEmailVerified) {
+      throw new UnauthorizedException('User not found or email not verified');
+    }
+  
+    const payload = { email: user.email, sub: user.id, role: user.role };
+    const token = this.jwtService.sign(payload);
+  
+    return {
+      access_token: token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    };
+  }
 }
